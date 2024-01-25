@@ -1,0 +1,26 @@
+This is a simple shader-based OpenGL program that displays a brief
+message.  It accepts keyboard and mouse input; clicking the left mouse
+button will switch between two images.  Type 'h' for a list of keyboard
+inputs that it will accept.
+
+This program is considerably simpler than the one discussed in my "OpenGL
+Programming" lecture notes (16-gl-prog.pdf).  In particular, it does no
+object or camera transformations.  The basic structure of the program,
+however, is the same.
+
+For compilation on a CS machine, you can use the provided Makefile, or
+you can use 'gmakemake > Makefile' to recreate it.
+
+For compilation elsewhere, you'll need to install some support libraries:
+
+    GLEW 2.1.0
+    GLFW 3.3.2
+    GLM 0.9.9.7 (not needed for this program, but really useful)
+
+See my CSCI-610 "Resources" page for more information.
+
+For compilation on a Mac, you can either set up an XCode project, or just
+use the provided 'compmac' shellscript.  Elsewhere, you'll need to figure
+out how to get things set up properly.
+
+-- wrc 2023/01/19
