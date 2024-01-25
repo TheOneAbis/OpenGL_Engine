@@ -198,7 +198,7 @@ static bool init( void )
     // need a VAO if we're using a core context;
     // doesn't hurt even if we're not using one
     glGenVertexArrays( 1, &vao );
-    glBindVertexArray( vao );
+    //glBindVertexArray( vao );
 
     // OpenGL state initialization
     glEnable( GL_DEPTH_TEST );
