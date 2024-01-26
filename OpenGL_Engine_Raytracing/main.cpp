@@ -1,112 +1,174 @@
-//
-//  main
-//
-//  Main program for assignments.
-//
-//  Created by Warren R. Carithers on 02/27/14.
-//  Updates: 2019/09/09 by wrc.
-//  Based on earlier versions created by Joe Geigel and Warren R. Carithers
-//  Copyright 2019 Rochester Institute of Technology. All rights reserved.
-//
-//  This file should not be modified by students.
-//
+#include <GL/glew.h>
 
-#include <cstdlib>
-#include <iostream>
-
-#if defined(_WIN32) || defined(_WIN64)
-#include <windows.h>
+#ifdef __APPLE__
+#include <GLUT/glut.h> // include glut for Mac
+#else
+#include <GL/freeglut.h> //include glut for Windows
 #endif
 
-//
-// GLEW and GLFW header files also pull in the OpenGL definitions
-//
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-
-#include "Application.h"
+#include <iostream>
+#include "ShaderSetup.h"
 
 using namespace std;
 
-//
-// Event callback routines
-//
-// We define a general GLFW callback routine; all others must be
-// defined and registered in the assignment-specific code.
-//
+// the window's width and height
+int width = 800, height = 600;
 
-///
-/// Error callback for GLFW
-///
-/// @param code  Error code
-/// @param desc  Brief description of what went wrong
-///
-void glfwError( int code, const char *desc )
+float vertices[] =
 {
-    cerr << "GLFW error " << code << ": " << desc << endl;
-    exit( 2 );
+     0.5f,  0.5f, 0.0f,  // top right
+     0.5f, -0.5f, 0.0f,  // bottom right
+    -0.5f, -0.5f, 0.0f,  // bottom left
+    -0.5f,  0.5f, 0.0f   // top left 
+};
+int indices[] =
+{
+    0, 1, 3,
+    1, 2, 3
+};
+
+unsigned int VBO, EBO, VAO, shaderProgram;
+
+void init()
+{
+    // Create and compile vertex shader
+    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    GLchar* vertexShaderSource = readTextFile("vertex.vert");
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    // Check compilation errors
+    int success;
+    char infoLog[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        cout << "SHADER COMPILATIN ERROR: VERTEX COMPILATION FAILED;\n" << infoLog << endl;
+    }
+
+    // Create and compile fragment shader
+    unsigned int fragShader;
+    fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+    GLchar* fragShaderSource = readTextFile("fragment.frag");
+    glShaderSource(fragShader, 1, &fragShaderSource, NULL);
+    glCompileShader(fragShader);
+
+    // Check compilation errors
+    glGetShaderiv(fragShader, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        cout << "SHADER COMPILATIN ERROR: FRAGMENT COMPILATION FAILED;\n" << infoLog << endl;
+    }
+
+    // Create shader program
+    shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragShader);
+    glLinkProgram(shaderProgram);
+
+    // once linked, shaders are no longer needed
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragShader);
+
+    // Check link errors
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    if (!success)
+    {
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        cout << "SHADER LINK ERROR: \n" << infoLog << endl;
+    }
+
+
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+    glGenVertexArrays(1, &VAO);
+
+    glBindVertexArray(VAO);
+
+    // copy vertices into VBO
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    // tell opengl how to interpret vertex data input
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
 }
 
-
-///
-/// Main program for this assignment
-///
-/// @param argc   command-line argument count
-/// @param argv   command-line argument strings
-///
-int main( int argc, char *argv[] )
+// called when the GL context need to be rendered
+void display(void)
 {
-    glfwSetErrorCallback( glfwError );
+    // clear the screen to white, which is the background color
+    glClearColor(1.0, 1.0, 1.0, 0.0);
 
-    if( !glfwInit() ) {
-        cerr << "Can't initialize GLFW!" << endl;
-        exit( 1 );
-    }
+    // clear the buffer stored for drawing
+    glClear(GL_COLOR_BUFFER_BIT);
 
-    // ensure we have at least OpenGL 3.2
-    glfwWindowHint( GLFW_CONTEXT_VERSION_MAJOR, 3 );
-    glfwWindowHint( GLFW_CONTEXT_VERSION_MINOR, 2 );
+    
+    // use the shader program
+    glUseProgram(shaderProgram);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0); // unbind VAO
 
-    // also select the "forward compatible" core profile
-    glfwWindowHint( GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE );
-    glfwWindowHint( GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE );
+    glutSwapBuffers();
+}
 
-    // w_width, w_height, and w_title come from the Application module
-    w_window = glfwCreateWindow( w_width, w_height, w_title, NULL, NULL );
+// called when window is first created or when window is resized
+void reshape(int w, int h)
+{
+    // update thescreen dimensions
+    width = w;
+    height = h;
 
-    if( !w_window ) {
-        cerr << "GLFW window create failed!" << endl;
-        glfwTerminate();
-        exit( 1 );
-    }
+    /* tell OpenGL to use the whole window for drawing */
+    glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+    //glViewport((GLsizei) width/2, (GLsizei) height/2, (GLsizei) width, (GLsizei) height);
 
-    glfwMakeContextCurrent( w_window );
+    glutPostRedisplay();
+}
+
+int main(int argc, char* argv[])
+{
+    //initialize GLUT, let it extract command-line GLUT options that you may provide
+    //NOTE that the '&' before argc
+    glutInit(&argc, argv);
+
+    // specify as double bufferred can make the display faster
+    // Color is speicfied to RGBA, four color channels with Red, Green, Blue and Alpha(depth)
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+
+    //set the initial window size */
+    glutInitWindowSize((int)width, (int)height);
+
+    // create the window with a title
+    glutCreateWindow("First OpenGL Program");
 
     GLenum err = glewInit();
-    if( err != GLEW_OK ) {
-        cerr << "GLEW error: " << glewGetErrorString(err) << endl;
-        glfwTerminate();
-        exit( 1 );
+    if (GLEW_OK != err)
+    {
+        // error occurred
+        fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
     }
+    fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 
-    if( !GLEW_VERSION_3_2 ) {
-        cerr << "OpenGL 3.2 not available" << endl;
-        glfwTerminate();
-        exit( 2 );
-    }
+    init();
 
-    // find out which OpenGL context version we're able to use
-    gl_maj = glfwGetWindowAttrib( w_window, GLFW_CONTEXT_VERSION_MAJOR );
-    gl_min = glfwGetWindowAttrib( w_window, GLFW_CONTEXT_VERSION_MINOR );
+    /* --- register callbacks with GLUT --- */
 
-    cerr << "GLFW: using " << gl_maj << "." << gl_min << " context" << endl;
+    //register function to handle window resizes
+    glutReshapeFunc(reshape);
 
-    // do all application-specific work
-    application( argc, argv );
+    //register function that draws in the window
+    glutDisplayFunc(display);
 
-    // all done - shut everything down cleanly
-    glfwDestroyWindow( w_window );
-    glfwTerminate();
+    //start the glut main loop
+    glutMainLoop();
 
     return 0;
 }

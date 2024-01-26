@@ -139,7 +139,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Application.cpp" />
     <ClCompile Include="Buffers.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Models.cpp" />
@@ -153,6 +152,10 @@
     <ClInclude Include="ShaderSetup.h" />
     <ClInclude Include="Types.h" />
     <ClInclude Include="Utils.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="fragment.frag" />
+    <None Include="vertex.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
