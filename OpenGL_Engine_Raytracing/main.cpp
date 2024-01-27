@@ -1,5 +1,12 @@
 #include <GL/glew.h>
 
+// GLM math library
+#define GLM_FORCE_RADIANS
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #ifdef __APPLE__
 #include <GLUT/glut.h> // include glut for Mac
 #else
@@ -7,114 +14,166 @@
 #endif
 
 #include <iostream>
-#include "ShaderSetup.h"
+#include "Model.h"
 
 using namespace std;
 
 // the window's width and height
 int width = 800, height = 600;
 
-float vertices[] =
+float floorVerts[] =
 {
-     0.5f,  0.5f, 0.0f,  // top right
-     0.5f, -0.5f, 0.0f,  // bottom right
-    -0.5f, -0.5f, 0.0f,  // bottom left
-    -0.5f,  0.5f, 0.0f   // top left 
+    0.5f, 0.0f, -5.0f,  0.f, 1.f, 0.f, // far right
+    0.5f, 0.0f, 5.0f,   0.f, 1.f, 0.f, // close right
+    -0.5f, 0.0f, 5.0f,   0.f, 1.f, 0.f, // close left 
+    -0.5f, 0.0f, -5.0f,  0.f, 1.f, 0.f  // far left
 };
-int indices[] =
+int floorIndices[] =
 {
-    0, 1, 3,
-    1, 2, 3
+    0, 3, 1,
+    1, 3, 2
 };
 
-unsigned int VBO, EBO, VAO, shaderProgram;
+struct Light
+{
+    unsigned int Type;         
+    glm::vec3 Direction;    
+    float Range;
+    glm::vec3 Position;
+    float Intensity;   
+    glm::vec3 Color;
+    float SpotFalloff; 
+};
+
+enum LightType : int
+{
+    LIGHT_TYPE_DIRECTIONAL,
+    LIGHT_TYPE_POINT,
+    LIGHT_TYPE_SPOT
+};
+
+vector<Light> lights;
+Shader shader;
+Model bigSphere, smallSphere;
+Mesh mFloor;
+
+glm::vec3 camPos, camVel, camForward;
+float dt, oldT;
 
 void init()
 {
-    // Create and compile vertex shader
-    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    GLchar* vertexShaderSource = readTextFile("vertex.vert");
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
 
-    // Check compilation errors
-    int success;
-    char infoLog[512];
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        cout << "SHADER COMPILATIN ERROR: VERTEX COMPILATION FAILED;\n" << infoLog << endl;
-    }
+    camPos = {};
+    camVel = {};
+    camForward = glm::vec3(0.f, 0.f, -1.f);
+    oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
 
-    // Create and compile fragment shader
-    unsigned int fragShader;
-    fragShader = glCreateShader(GL_FRAGMENT_SHADER);
-    GLchar* fragShaderSource = readTextFile("fragment.frag");
-    glShaderSource(fragShader, 1, &fragShaderSource, NULL);
-    glCompileShader(fragShader);
+    shader = Shader("vertex.vert", "fragment.frag");
 
-    // Check compilation errors
-    glGetShaderiv(fragShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        cout << "SHADER COMPILATIN ERROR: FRAGMENT COMPILATION FAILED;\n" << infoLog << endl;
-    }
+    bigSphere = Model("sphere.fbx");
+    smallSphere = Model("sphere.fbx");
 
-    // Create shader program
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragShader);
-    glLinkProgram(shaderProgram);
+    vector<Vertex> floorVerts;
+    floorVerts.push_back({ glm::vec3(2.f, -1.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) });
+    floorVerts.push_back({ glm::vec3(-2.f, -1.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) });
+    floorVerts.push_back({ glm::vec3(-2.f, -1.f, -8.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) });
+    floorVerts.push_back({ glm::vec3(2.f, -1.f, -8.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) });
 
-    // once linked, shaders are no longer needed
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragShader);
+    vector<unsigned int> floorIndices;
+    floorIndices.push_back(0);
+    floorIndices.push_back(2);
+    floorIndices.push_back(1);
+    floorIndices.push_back(0);
+    floorIndices.push_back(3);
+    floorIndices.push_back(2);
+    mFloor = Mesh(floorVerts, floorIndices, vector<Texture>());
 
-    // Check link errors
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success)
-    {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        cout << "SHADER LINK ERROR: \n" << infoLog << endl;
-    }
+    Light point = {};
+    point.Type = LIGHT_TYPE_POINT;
+    point.Color = glm::vec3(1.f, 1.f, 1.f);
+    point.Intensity = 1.f;
+    point.Position = glm::vec3(-2, 0, 0);
+    point.Range = 10.f;
+    //lights.push_back(point);
 
+    Light dirLight = {};
+    dirLight.Type = LIGHT_TYPE_DIRECTIONAL;
+    dirLight.Direction = glm::normalize(glm::vec3(-0.3f, -1.f, -0.5f));
+    dirLight.Color = glm::vec3(1.f, 1.f, 1.f);
+    dirLight.Intensity = 3.f;
+    lights.push_back(dirLight);
+}
 
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-    glGenVertexArrays(1, &VAO);
+void Tick()
+{
+    float newT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+    dt = newT - oldT;
+    oldT = newT;
 
-    glBindVertexArray(VAO);
+    glm::vec3 t = glm::normalize(camVel);
+    if (!isnan(t.x))
+        camPos += t * dt * 3.f;
 
-    // copy vertices into VBO
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    // tell opengl how to interpret vertex data input
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
+    glutPostRedisplay();
 }
 
 // called when the GL context need to be rendered
 void display(void)
 {
     // clear the screen to white, which is the background color
-    glClearColor(1.0, 1.0, 1.0, 0.0);
+    glClearColor(0.1, 0.1, 0.1, 0.0);
 
     // clear the buffer stored for drawing
-    glClear(GL_COLOR_BUFFER_BIT);
-
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
+    glm::mat4x4 world = glm::mat4x4(1.f);
+    glm::mat4x4 view = glm::lookAt(camPos, camPos + glm::normalize(camForward), glm::vec3(0.f, 1.f, 0.f));
+
     // use the shader program
-    glUseProgram(shaderProgram);
-    glBindVertexArray(VAO);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0); // unbind VAO
+    shader.use();
+
+    // Set vertex uniforms
+    shader.SetMatrix4x4("view", view);
+    shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
+
+    // Set fragment uniforms
+    shader.SetFloat("roughness", 0.1f);
+    shader.SetFloat("metallic", 0.0f);
+    shader.SetVector3("ambient", glm::vec3(0.05f, 0.05f, 0.05f));
+    shader.SetVector3("cameraPosition", camPos);
+
+    // Lighting uniform data
+    for (unsigned int i = 0; i < lights.size(); i++)
+    {
+        shader.SetUint("lights[" + to_string(i) + "].Type", lights[i].Type);
+        shader.SetVector3("lights[" + to_string(i) + "].Direction", lights[i].Direction);
+        shader.SetFloat("lights[" + to_string(i) + "].Range", lights[i].Range);
+        shader.SetVector3("lights[" + to_string(i) + "].Position", lights[i].Position);
+        shader.SetFloat("lights[" + to_string(i) + "].Intensity", lights[i].Intensity);
+        shader.SetVector3("lights[" + to_string(i) + "].Color", lights[i].Color);
+        shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
+    }
+
+    world = glm::mat4x4();
+    shader.SetMatrix4x4("world", world);
+    shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
+    shader.SetVector3("albedoColor", glm::vec3(0.f, 0.3f, 0.75f));
+    mFloor.Draw(shader);
+
+    world = glm::translate(glm::scale(glm::mat4x4(), glm::vec3(0.5f, 0.5f, 0.5f)), glm::vec3(0.f, 0.f, -2.f));
+    shader.SetMatrix4x4("world", world);
+    shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
+    shader.SetVector3("albedoColor", glm::vec3(0.3f, 0.3f, 0.1f));
+    smallSphere.Draw(shader);
+
+    world = glm::translate(glm::mat4(), glm::vec3(-1.f, -0.5f, -3.f));
+    shader.SetMatrix4x4("world", world);
+    shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
+    shader.SetFloat("metallic", 0.5f);
+    shader.SetVector3("albedoColor", glm::vec3(0.5f, 0.1f, 0.5f));
+    bigSphere.Draw(shader);
 
     glutSwapBuffers();
 }
@@ -128,26 +187,54 @@ void reshape(int w, int h)
 
     /* tell OpenGL to use the whole window for drawing */
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
-    //glViewport((GLsizei) width/2, (GLsizei) height/2, (GLsizei) width, (GLsizei) height);
 
     glutPostRedisplay();
 }
 
+void processKeyInput(unsigned char key, int xMouse, int yMouse)
+{
+    if (key == 'w')
+        camVel.z = -1.f;
+    if (key == 'a')
+        camVel.x = -1.f;
+    if (key == 's')
+        camVel.z = 1.f;
+    if (key == 'd')
+        camVel.x = 1.f;
+    if (key == 'e')
+        camVel.y = 1.f;
+    if (key == 'q')
+        camVel.y = -1.f;
+}
+
+void processKeyUpInput(unsigned char key, int xMouse, int yMouse)
+{
+    if (key == 'w' || key == 's')
+        camVel.z = 0;
+    if (key == 'a' || key == 'd')
+        camVel.x = 0;
+    if (key == 'q' || key == 'e')
+        camVel.y = 0;
+}
+
+void processMouse(int button, int state, int x, int y)
+{
+
+}
+
 int main(int argc, char* argv[])
 {
-    //initialize GLUT, let it extract command-line GLUT options that you may provide
-    //NOTE that the '&' before argc
+    //initialize GLUT
     glutInit(&argc, argv);
 
-    // specify as double bufferred can make the display faster
-    // Color is speicfied to RGBA, four color channels with Red, Green, Blue and Alpha(depth)
+    // double bufferred
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 
-    //set the initial window size */
+    //set the initial window size
     glutInitWindowSize((int)width, (int)height);
 
     // create the window with a title
-    glutCreateWindow("First OpenGL Program");
+    glutCreateWindow("OpenGL Program");
 
     GLenum err = glewInit();
     if (GLEW_OK != err)
@@ -166,6 +253,13 @@ int main(int argc, char* argv[])
 
     //register function that draws in the window
     glutDisplayFunc(display);
+
+    glutIdleFunc(Tick);
+
+    // Processing input
+    glutKeyboardFunc(processKeyInput);
+    glutKeyboardUpFunc(processKeyUpInput);
+    glutMouseFunc(processMouse);
 
     //start the glut main loop
     glutMainLoop();
