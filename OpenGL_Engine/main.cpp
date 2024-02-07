@@ -1,70 +1,64 @@
+#include <GL/glew.h>
+
+// GLM math library
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+
 #ifdef __APPLE__
 #include <GLUT/glut.h> // include glut for Mac
 #else
 #include <GL/freeglut.h> //include glut for Windows
 #endif
 
+#include <iostream>
+#include <vector>
+
+#include "../Shader.h"
+
+using namespace std;
 
 // the window's width and height
-int width, height;
+int width = 800, height = 600;
+float dt, oldT;
+Shader shader("vertex_2d.vert", "fragment_2d.frag");
 
-// the three vertices of a triangle
-float v0[2];
-float v1[2];
-float v2[2];
-
-
-void createTriangle()
+struct Vertex
 {
-    // initialize the triangle's vertices
-    v0[0] = 0.0f;
-    v0[1] = 0.0f;
-    v1[0] = 5.0f;
-    v1[1] = 0.0f;
-    v2[0] = 2.5f;
-    v2[1] = 3.0f;
+    glm::vec3 pos;
+    glm::vec3 color;
+};
+
+vector<Vertex> drawVerts;
+
+void init()
+{
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+
+    oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
 }
 
-void init(void)
+void Tick()
 {
-    // initialize the size of the window
-    width = 600;
-    height = 600;
-    createTriangle();
+    float newT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+    dt = newT - oldT;
+    oldT = newT;
+
+    glutPostRedisplay();
 }
 
 // called when the GL context need to be rendered
 void display(void)
 {
     // clear the screen to white, which is the background color
-    glClearColor(1.0, 1.0, 1.0, 0.0);
+    glClearColor(0.1, 0.1, 0.1, 0.0);
 
     // clear the buffer stored for drawing
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    // specify the color for drawing
-    glColor3f(1.0, 0.0, 0.0);
-
-    // this is immedidate mode of OpenGL usded prior to OpenGL 3.0
-    glBegin(GL_TRIANGLES);
-    glVertex2fv(v0);
-    glVertex2fv(v1);
-    glVertex2fv(v2);
-    glEnd();
-
-    // specify the color for new drawing
-    glColor3f(0.0, 0.0, 1.0);
-
-    // draw the origin of the canvas
-    glPointSize(30.0f);
-    glBegin(GL_POINTS);
-    glVertex2f(0.0f, 0.0f);
-    glEnd();
-    glPointSize(1.0f);
+    // use the shader program
+    shader.use();
+    
 
     glutSwapBuffers();
 }
@@ -76,38 +70,48 @@ void reshape(int w, int h)
     width = w;
     height = h;
 
-    //do an orthographic parallel projection, limited by screen/window size
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluOrtho2D(0.0, 10.0, 0.0, 10.0);
-    //gluOrtho2D(-5.0, 5.0, -5.0, 5.0);
-
     /* tell OpenGL to use the whole window for drawing */
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
-    //glViewport((GLsizei) width/2, (GLsizei) height/2, (GLsizei) width, (GLsizei) height);
 
     glutPostRedisplay();
 }
 
+void processKeyInput(unsigned char key, int xMouse, int yMouse)
+{
+}
+
+void processKeyUpInput(unsigned char key, int xMouse, int yMouse)
+{
+}
+
+void processMouse(int button, int state, int x, int y)
+{
+
+}
+
 int main(int argc, char* argv[])
 {
-    // before create a glut window,
-    // initialize stuff not opengl/glut dependent
-    init();
-
-    //initialize GLUT, let it extract command-line GLUT options that you may provide
-    //NOTE that the '&' before argc
+    //initialize GLUT
     glutInit(&argc, argv);
 
-    // specify as double bufferred can make the display faster
-    // Color is speicfied to RGBA, four color channels with Red, Green, Blue and Alpha(depth)
+    // double bufferred
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 
-    //set the initial window size */
+    //set the initial window size
     glutInitWindowSize((int)width, (int)height);
 
     // create the window with a title
-    glutCreateWindow("First OpenGL Program");
+    glutCreateWindow("OpenGL Program");
+
+    GLenum err = glewInit();
+    if (GLEW_OK != err)
+    {
+        // error occurred
+        fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
+    }
+    fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
+
+    init();
 
     /* --- register callbacks with GLUT --- */
 
@@ -116,6 +120,13 @@ int main(int argc, char* argv[])
 
     //register function that draws in the window
     glutDisplayFunc(display);
+
+    glutIdleFunc(Tick);
+
+    // Processing input
+    glutKeyboardFunc(processKeyInput);
+    glutKeyboardUpFunc(processKeyUpInput);
+    glutMouseFunc(processMouse);
 
     //start the glut main loop
     glutMainLoop();
