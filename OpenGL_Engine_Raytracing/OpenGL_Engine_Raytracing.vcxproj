@@ -139,6 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\Shader.cpp" />
     <ClCompile Include="Buffers.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Model.cpp" />
@@ -146,6 +147,7 @@
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Shader.h" />
     <ClInclude Include="Buffers.h" />
     <ClInclude Include="Model.h" />
     <ClInclude Include="Mesh.h" />
