@@ -170,15 +170,13 @@ void display(void)
         vector<Vertex> lastVerts = drawVertGroups.back();
         auto lastV = lastVerts.end();
 
-        if (lastVerts.size() > 2)
+        if ((drawMode == GL_TRIANGLES || drawMode == GL_TRIANGLE_FAN) && lastVerts.size() > 2)
         {
-            if (drawMode == GL_TRIANGLES || drawMode == GL_TRIANGLE_FAN)
-                lastV = lastVerts.end() - 3, lastVerts.begin();
+            lastV = lastVerts.end() - 3, lastVerts.begin();
         }
-        else if (lastVerts.size() > 3)
+        else if (drawMode == GL_QUADS && lastVerts.size() > 3)
         {
-            if (drawMode == GL_QUADS)
-                lastV = lastVerts.end() - 4, lastVerts.begin();
+            lastV = lastVerts.end() - 4, lastVerts.begin();
         }
         else if (!lastVerts.empty())
         {
@@ -224,7 +222,8 @@ void processKeyInput(unsigned char key, int xMouse, int yMouse)
         break;
 
     default: // if any key was pressed, break the draw here
-        drawVertGroups.push_back(vector<Vertex>());
+        if (!drawVertGroups.back().empty())
+            drawVertGroups.push_back(vector<Vertex>());
         break;
     }
 }
