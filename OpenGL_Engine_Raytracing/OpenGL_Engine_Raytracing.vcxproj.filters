@@ -27,6 +27,12 @@
     <ClCompile Include="..\Shader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Transform.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Material.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Mesh.h">
@@ -38,12 +44,24 @@
     <ClInclude Include="..\Shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Transform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Material.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="vertex.vert">
       <Filter>Resource Files</Filter>
     </None>
     <None Include="fragment.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="fragment_basic.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="vertex_basic.vert">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

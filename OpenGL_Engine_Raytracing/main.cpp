@@ -19,20 +19,7 @@
 using namespace std;
 
 // the window's width and height
-int width = 800, height = 600;
-
-float floorVerts[] =
-{
-    0.5f, 0.0f, -5.0f,  0.f, 1.f, 0.f, // far right
-    0.5f, 0.0f, 5.0f,   0.f, 1.f, 0.f, // close right
-    -0.5f, 0.0f, 5.0f,   0.f, 1.f, 0.f, // close left 
-    -0.5f, 0.0f, -5.0f,  0.f, 1.f, 0.f  // far left
-};
-int floorIndices[] =
-{
-    0, 3, 1,
-    1, 3, 2
-};
+int width = 1280, height = 720;
 
 struct Light
 {
@@ -54,10 +41,13 @@ enum LightType : int
 
 vector<Light> lights;
 Shader shader;
-Model bigSphere, smallSphere;
-Mesh mFloor;
+Model smallSphere, bigSphere, cone;
+Model mFloor;
+std::vector<Model> models;
 
-glm::vec3 camPos, camVel, camForward;
+glm::vec3 camVel;
+Transform camTM;
+
 float dt, oldT;
 
 void init()
@@ -65,38 +55,52 @@ void init()
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
 
-    camPos = {};
+    // set up camera
     camVel = {};
-    camForward = glm::vec3(0.f, 0.f, -1.f);
     oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
 
-    shader = Shader("vertex.vert", "fragment.frag");
+    // set up shader
+    shader = Shader("vertex_basic.vert", "fragment_basic.frag");
 
-    bigSphere = Model("sphere.fbx");
-    smallSphere = Model("sphere.fbx");
+    // set up scene models
+    smallSphere = Model("Assets/sphere.fbx");
+    smallSphere.SetWorldTM({1.5f, 0.f, 3.25f}, glm::quat(), {0.75f, 0.75f, 0.75f});
+    smallSphere.GetMaterial().albedo = { 0.3f, 0.3f, 0.1f };
 
-    vector<Vertex> floorVerts;
-    floorVerts.push_back({ glm::vec3(2.f, -1.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) });
-    floorVerts.push_back({ glm::vec3(-2.f, -1.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) });
-    floorVerts.push_back({ glm::vec3(-2.f, -1.f, -8.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) });
-    floorVerts.push_back({ glm::vec3(2.f, -1.f, -8.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) });
+    bigSphere = Model("Assets/sphere.fbx");
+    bigSphere.SetWorldTM({ 0.f, 0.5f, 2.f }, glm::quat(), {1.f, 1.f, 1.f});
+    auto* mat = &bigSphere.GetMaterial();
+    mat->albedo = { 0.5f, 0.1f, 0.5f };
+    mat->metallic = 0.5f;
+   
+    cone = Model("Assets/cone.obj");
+    cone.SetWorldTM({ -1.5f, 0.5f, 3.f }, glm::quat(), {1.f, 1.f, 1.f});
+    mat = &cone.GetMaterial();
+    mat->albedo = { 0.8f, 0.3f, 0.1f };
+    mat->specular = 0.2f;
 
-    vector<unsigned int> floorIndices;
-    floorIndices.push_back(0);
-    floorIndices.push_back(2);
-    floorIndices.push_back(1);
-    floorIndices.push_back(0);
-    floorIndices.push_back(3);
-    floorIndices.push_back(2);
-    mFloor = Mesh(floorVerts, floorIndices, vector<Texture>());
+    mFloor = Model({ Mesh(
+        {
+            { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
+            { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
+            { glm::vec3(1.f, 0.f, 1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) },
+            { glm::vec3(0.f, 0.f, 1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
+        }, 
+        { 0, 2, 1, 0, 3, 2 }, 
+        vector<Texture>()) });
+    mFloor.SetWorldTM(Transform({-1, -1, 0}, glm::quat(), {3, 1, 5}));
+    mFloor.GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
 
+    models = { smallSphere, bigSphere, cone, mFloor };
+
+    // set up lights
     Light point = {};
     point.Type = LIGHT_TYPE_POINT;
     point.Color = glm::vec3(1.f, 1.f, 1.f);
     point.Intensity = 1.f;
     point.Position = glm::vec3(-2, 0, 0);
     point.Range = 10.f;
-    //lights.push_back(point);
+    lights.push_back(point);
 
     Light dirLight = {};
     dirLight.Type = LIGHT_TYPE_DIRECTIONAL;
@@ -114,7 +118,7 @@ void Tick()
 
     glm::vec3 t = glm::normalize(camVel);
     if (!isnan(t.x))
-        camPos += t * dt * 3.f;
+        camTM.Translate(t * camTM.GetRotation() * dt * 3.f);
 
     glutPostRedisplay();
 }
@@ -129,51 +133,20 @@ void display(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     glm::mat4x4 world = glm::mat4x4(1.f);
-    glm::mat4x4 view = glm::lookAt(camPos, camPos + glm::normalize(camForward), glm::vec3(0.f, 1.f, 0.f));
+    glm::mat4x4 view = glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() + camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f));
 
     // use the shader program
     shader.use();
-
-    // Set vertex uniforms
     shader.SetMatrix4x4("view", view);
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
 
-    // Set fragment uniforms
-    shader.SetFloat("roughness", 0.1f);
-    shader.SetFloat("metallic", 0.0f);
+    // set ambient color
     shader.SetVector3("ambient", glm::vec3(0.05f, 0.05f, 0.05f));
-    shader.SetVector3("cameraPosition", camPos);
 
-    // Lighting uniform data
-    for (unsigned int i = 0; i < lights.size(); i++)
+    for (auto& model : models)
     {
-        shader.SetUint("lights[" + to_string(i) + "].Type", lights[i].Type);
-        shader.SetVector3("lights[" + to_string(i) + "].Direction", lights[i].Direction);
-        shader.SetFloat("lights[" + to_string(i) + "].Range", lights[i].Range);
-        shader.SetVector3("lights[" + to_string(i) + "].Position", lights[i].Position);
-        shader.SetFloat("lights[" + to_string(i) + "].Intensity", lights[i].Intensity);
-        shader.SetVector3("lights[" + to_string(i) + "].Color", lights[i].Color);
-        shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
+        model.Draw(shader);
     }
-
-    world = glm::mat4x4();
-    shader.SetMatrix4x4("world", world);
-    shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
-    shader.SetVector3("albedoColor", glm::vec3(0.f, 0.3f, 0.75f));
-    mFloor.Draw(shader);
-
-    world = glm::translate(glm::scale(glm::mat4x4(), glm::vec3(0.5f, 0.5f, 0.5f)), glm::vec3(0.f, 0.f, -2.f));
-    shader.SetMatrix4x4("world", world);
-    shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
-    shader.SetVector3("albedoColor", glm::vec3(0.3f, 0.3f, 0.1f));
-    smallSphere.Draw(shader);
-
-    world = glm::translate(glm::mat4(), glm::vec3(-1.f, -0.5f, -3.f));
-    shader.SetMatrix4x4("world", world);
-    shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
-    shader.SetFloat("metallic", 0.5f);
-    shader.SetVector3("albedoColor", glm::vec3(0.5f, 0.1f, 0.5f));
-    bigSphere.Draw(shader);
 
     glutSwapBuffers();
 }
@@ -194,13 +167,13 @@ void reshape(int w, int h)
 void processKeyInput(unsigned char key, int xMouse, int yMouse)
 {
     if (key == 'w')
-        camVel.z = -1.f;
-    if (key == 'a')
-        camVel.x = -1.f;
-    if (key == 's')
         camVel.z = 1.f;
-    if (key == 'd')
+    if (key == 'a')
         camVel.x = 1.f;
+    if (key == 's')
+        camVel.z = -1.f;
+    if (key == 'd')
+        camVel.x = -1.f;
     if (key == 'e')
         camVel.y = 1.f;
     if (key == 'q')
@@ -219,7 +192,11 @@ void processKeyUpInput(unsigned char key, int xMouse, int yMouse)
 
 void processMouse(int button, int state, int x, int y)
 {
+}
 
+void MouseMotion(int x, int y)
+{
+    camTM.SetRotationEulersZYX(glm::vec3(-y * 0.0025f, x * 0.0025f, 0.f));
 }
 
 int main(int argc, char* argv[])
@@ -260,6 +237,7 @@ int main(int argc, char* argv[])
     glutKeyboardFunc(processKeyInput);
     glutKeyboardUpFunc(processKeyUpInput);
     glutMouseFunc(processMouse);
+    glutPassiveMotionFunc(MouseMotion);
 
     //start the glut main loop
     glutMainLoop();

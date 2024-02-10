@@ -3,16 +3,55 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 using namespace std;
 
 unsigned int TextureFromFile(const char* path, const string& directory, bool gamma = false);
 
+Model::Model(std::vector<Mesh> meshes, Transform tm)
+{
+	transform = tm;
+	this->meshes.insert(this->meshes.begin(), meshes.begin(), meshes.end());
+}
+
 void Model::Draw(Shader& shader)
 {
+
+	glm::mat4x4 world = glm::scale(glm::translate(glm::mat4x4(), transform.GetTranslation()), transform.GetScale());
+	world *= glm::toMat4(transform.GetRotation());
+
+	shader.SetMatrix4x4("world", world);
+	shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
+
+	shader.SetVector3("albedoColor", material.albedo);
+	shader.SetFloat("metallic", material.metallic);
+	shader.SetFloat("specular", material.specular);
+
 	for (auto& mesh : meshes)
 	{
 		mesh.Draw(shader);
 	}
+}
+
+Transform Model::GetWorldTM()
+{
+	return transform;
+}
+
+void Model::SetWorldTM(Transform newT)
+{
+	transform = newT;
+}
+
+void Model::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
+{
+	transform = Transform(translation, rotation, scale);
+}
+
+Material& Model::GetMaterial()
+{
+	return material;
 }
 
 void Model::LoadModel(string path)
