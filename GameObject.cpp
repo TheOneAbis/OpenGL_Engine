@@ -1,5 +1,6 @@
-#include "Model.h"
+#include "GameObject.h"
 
+#include <assimp/scene.h>
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 
@@ -9,13 +10,19 @@ using namespace std;
 
 unsigned int TextureFromFile(const char* path, const string& directory, bool gamma = false);
 
-Model::Model(std::vector<Mesh> meshes, Transform tm)
+GameObject::GameObject(std::vector<Mesh> meshes, Transform tm)
 {
 	transform = tm;
 	this->meshes.insert(this->meshes.begin(), meshes.begin(), meshes.end());
 }
 
-void Model::Draw(Shader& shader)
+GameObject(const char* path, Transform tm = Transform())
+{
+	LoadModel(path);
+	transform = tm;
+}
+
+void GameObject::Draw(Shader& shader)
 {
 
 	glm::mat4x4 world = glm::scale(glm::translate(glm::mat4x4(), transform.GetTranslation()), transform.GetScale());
@@ -34,27 +41,27 @@ void Model::Draw(Shader& shader)
 	}
 }
 
-Transform Model::GetWorldTM()
+Transform GameObject::GetWorldTM()
 {
 	return transform;
 }
 
-void Model::SetWorldTM(Transform newT)
+void GameObject::SetWorldTM(Transform newT)
 {
 	transform = newT;
 }
 
-void Model::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
+void GameObject::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
 {
 	transform = Transform(translation, rotation, scale);
 }
 
-Material& Model::GetMaterial()
+Material& GameObject::GetMaterial()
 {
 	return material;
 }
 
-void Model::LoadModel(string path)
+void LoadModel(string path)
 {
 	Assimp::Importer import;
 	// if model doesn't entirely consist of tri's, transform them to tri's first
@@ -65,27 +72,26 @@ void Model::LoadModel(string path)
 		cout << "ASSIMP ERROR: " << import.GetErrorString() << endl;
 		return;
 	}
-	directory = path.substr(0, path.find_last_of('/'));
 
-	ProcessNode(scene->mRootNode, scene);
+	ProcessNode(scene->mRootNode, scene, path.substr(0, path.find_last_of('/')));
 }
 
-void Model::ProcessNode(aiNode* node, const aiScene* scene)
+void ProcessNode(vector<Mesh>& meshes, aiNode* node, const aiScene* scene, const string directory)
 {
 	// process all the node's meshes (if any)
 	for (unsigned int i = 0; i < node->mNumMeshes; i++)
 	{
 		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		meshes.push_back(ProcessMesh(mesh, scene));
+		meshes.push_back(ProcessMesh(mesh, scene, directory));
 	}
 	// then do the same for each of its children
 	for (unsigned int i = 0; i < node->mNumChildren; i++)
 	{
-		ProcessNode(node->mChildren[i], scene);
+		ProcessNode(meshes, node->mChildren[i], scene);
 	}
 }
 
-Mesh Model::ProcessMesh(aiMesh* mesh, const aiScene* scene)
+Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene, const string directory)
 {
 	vector<Vertex> vertices;
 	vector<unsigned int> indices;
@@ -149,7 +155,7 @@ Mesh Model::ProcessMesh(aiMesh* mesh, const aiScene* scene)
 	return Mesh(vertices, indices, textures);
 }
 
-vector<Texture> Model::LoadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName)
+vector<Texture> LoadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName)
 {
 	vector<Texture> textures;
 	for (unsigned int i = 0; i < mat->GetTextureCount(type); i++)

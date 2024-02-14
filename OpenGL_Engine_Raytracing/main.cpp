@@ -14,7 +14,7 @@
 #endif
 
 #include <iostream>
-#include "Model.h"
+#include "../GameObject.h"
 
 using namespace std;
 
@@ -41,9 +41,9 @@ enum LightType : int
 
 vector<Light> lights;
 Shader shader;
-Model smallSphere, bigSphere, cone;
-Model mFloor;
-std::vector<Model> models;
+GameObject smallSphere, bigSphere, cone;
+GameObject mFloor;
+std::vector<GameObject> gameObjects;
 
 glm::vec3 camVel;
 Transform camTM;
@@ -63,23 +63,23 @@ void init()
     shader = Shader("vertex_basic.vert", "fragment_basic.frag");
 
     // set up scene models
-    smallSphere = Model("Assets/sphere.fbx");
+    smallSphere = GameObject("Assets/sphere.fbx");
     smallSphere.SetWorldTM({1.5f, 0.f, 3.25f}, glm::quat(), {0.75f, 0.75f, 0.75f});
     smallSphere.GetMaterial().albedo = { 0.3f, 0.3f, 0.1f };
 
-    bigSphere = Model("Assets/sphere.fbx");
+    bigSphere = GameObject("Assets/sphere.fbx");
     bigSphere.SetWorldTM({ 0.f, 0.5f, 2.f }, glm::quat(), {1.f, 1.f, 1.f});
     auto* mat = &bigSphere.GetMaterial();
     mat->albedo = { 0.5f, 0.1f, 0.5f };
     mat->metallic = 0.5f;
    
-    cone = Model("Assets/cone.obj");
+    cone = GameObject("Assets/cone.obj");
     cone.SetWorldTM({ -1.5f, 0.5f, 3.f }, glm::quat(), {1.f, 1.f, 1.f});
     mat = &cone.GetMaterial();
     mat->albedo = { 0.8f, 0.3f, 0.1f };
     mat->specular = 0.2f;
 
-    mFloor = Model({ Mesh(
+    mFloor = GameObject({ Mesh(
         {
             { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
             { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
@@ -91,7 +91,7 @@ void init()
     mFloor.SetWorldTM(Transform({-1, -1, 0}, glm::quat(), {3, 1, 5}));
     mFloor.GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
 
-    models = { smallSphere, bigSphere, cone, mFloor };
+    gameObjects = { smallSphere, bigSphere, cone, mFloor };
 
     // set up lights
     Light point = {};
@@ -143,7 +143,7 @@ void display(void)
     // set ambient color
     shader.SetVector3("ambient", glm::vec3(0.05f, 0.05f, 0.05f));
 
-    for (auto& model : models)
+    for (auto& model : gameObjects)
     {
         model.Draw(shader);
     }
