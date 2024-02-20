@@ -139,23 +139,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\GameObject.cpp" />
     <ClCompile Include="..\Shader.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Material.cpp" />
-    <ClCompile Include="GameObject.cpp" />
     <ClCompile Include="Mesh.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\GameObject.h" />
     <ClInclude Include="..\Shader.h" />
-    <ClInclude Include="Material.h" />
-    <ClInclude Include="GameObject.h" />
     <ClInclude Include="Mesh.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="fragment.frag" />
-    <None Include="fragment_basic.frag" />
-    <None Include="vertex.vert" />
-    <None Include="vertex_basic.vert" />
+    <None Include="..\Shaders\fragment.frag" />
+    <None Include="..\Shaders\fragment_basic.frag" />
+    <None Include="..\Shaders\vertex.vert" />
+    <None Include="..\Shaders\vertex_basic.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

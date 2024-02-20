@@ -1,5 +1,7 @@
 #include "Transform.h"
 
+using namespace AB;
+
 Transform::Transform()
 {
 	this->translation = glm::vec3();

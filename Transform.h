@@ -3,36 +3,39 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-class Transform
+namespace AB
 {
-public:
+	class Transform
+	{
+	public:
 
-	Transform();
-	Transform(glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
+		Transform();
+		Transform(glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
 
-	~Transform() = default;
+		~Transform() = default;
 
-	glm::vec3 GetTranslation();
-	glm::quat GetRotation();
-	glm::vec3 GetScale();
+		glm::vec3 GetTranslation();
+		glm::quat GetRotation();
+		glm::vec3 GetScale();
 
-	void SetTranslation(glm::vec3 newTranslation);
-	void Translate(glm::vec3 translationOffset);
+		void SetTranslation(glm::vec3 newTranslation);
+		void Translate(glm::vec3 translationOffset);
 
-	void SetRotation(glm::quat newRotation);
-	void SetRotationEulersXYZ(glm::vec3 eulers);
-	void SetRotationEulersZYX(glm::vec3 eulers);
+		void SetRotation(glm::quat newRotation);
+		void SetRotationEulersXYZ(glm::vec3 eulers);
+		void SetRotationEulersZYX(glm::vec3 eulers);
 
-	void SetScale(glm::vec3 newScale);
+		void SetScale(glm::vec3 newScale);
 
-	glm::vec3 GetForward();
-	glm::vec3 GetUp();
-	glm::vec3 GetRight();
+		glm::vec3 GetForward();
+		glm::vec3 GetUp();
+		glm::vec3 GetRight();
 
-private:
+	private:
 
-	glm::vec3 translation;
-	glm::quat rotation;
-	glm::vec3 scale;
+		glm::vec3 translation;
+		glm::quat rotation;
+		glm::vec3 scale;
 
-};
+	};
+}

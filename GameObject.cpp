@@ -6,27 +6,33 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Transform.h"
+
 using namespace std;
+using namespace AB;
 
 unsigned int TextureFromFile(const char* path, const string& directory, bool gamma = false);
 
-GameObject::GameObject(std::vector<Mesh> meshes, Transform tm)
+GameObject::GameObject(GameObject* parent, Mesh mesh, Transform tm)
 {
-	transform = tm;
-	this->meshes.insert(this->meshes.begin(), meshes.begin(), meshes.end());
+	this->parent = parent;
+	localTm = tm;
+	this->mesh = mesh;
 }
 
-GameObject(const char* path, Transform tm = Transform())
+GameObject::GameObject(GameObject* parent, const char* path, Transform localT)
 {
+	this->parent = parent;
+
+	SetLocalTM(localT);
+
 	LoadModel(path);
-	transform = tm;
 }
 
 void GameObject::Draw(Shader& shader)
 {
-
-	glm::mat4x4 world = glm::scale(glm::translate(glm::mat4x4(), transform.GetTranslation()), transform.GetScale());
-	world *= glm::toMat4(transform.GetRotation());
+	glm::mat4x4 world = glm::scale(glm::translate(glm::mat4x4(), worldTm.GetTranslation()), worldTm.GetScale());
+	world *= glm::toMat4(worldTm.GetRotation());
 
 	shader.SetMatrix4x4("world", world);
 	shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
@@ -35,25 +41,43 @@ void GameObject::Draw(Shader& shader)
 	shader.SetFloat("metallic", material.metallic);
 	shader.SetFloat("specular", material.specular);
 
-	for (auto& mesh : meshes)
+	// draw this mesh
+	mesh.Draw(shader);
+
+	// draw children meshes, for those that have one
+	for (auto& child : children)
 	{
-		mesh.Draw(shader);
+		child.Draw(shader);
 	}
 }
 
 Transform GameObject::GetWorldTM()
 {
-	return transform;
+	return worldTm;
+}
+Transform GameObject::GetLocalTM()
+{
+	return localTm;
 }
 
+// world transform
 void GameObject::SetWorldTM(Transform newT)
 {
-	transform = newT;
+	worldTm = newT;
 }
-
 void GameObject::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
 {
-	transform = Transform(translation, rotation, scale);
+	SetWorldTM(Transform(translation, rotation, scale));
+}
+
+// local transform
+void GameObject::SetLocalTM(Transform newT)
+{
+	localTm = newT;
+}
+void GameObject::SetLocalTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
+{
+	SetLocalTM(Transform(translation, rotation, scale));
 }
 
 Material& GameObject::GetMaterial()
@@ -61,7 +85,12 @@ Material& GameObject::GetMaterial()
 	return material;
 }
 
-void LoadModel(string path)
+Mesh& GameObject::GetMesh()
+{
+	return mesh;
+}
+
+void GameObject::LoadModel(string path)
 {
 	Assimp::Importer import;
 	// if model doesn't entirely consist of tri's, transform them to tri's first
@@ -73,21 +102,23 @@ void LoadModel(string path)
 		return;
 	}
 
-	ProcessNode(scene->mRootNode, scene, path.substr(0, path.find_last_of('/')));
+	ProcessNode(children, scene->mRootNode, scene, path.substr(0, path.find_last_of('/')));
 }
 
-void ProcessNode(vector<Mesh>& meshes, aiNode* node, const aiScene* scene, const string directory)
+void ProcessNode(vector<GameObject>& children, aiNode* node, const aiScene* scene, const string directory)
 {
 	// process all the node's meshes (if any)
 	for (unsigned int i = 0; i < node->mNumMeshes; i++)
 	{
 		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		meshes.push_back(ProcessMesh(mesh, scene, directory));
+
+		GameObject child(ProcessMesh(mesh, scene, directory))
+		children.push_back(child);
 	}
 	// then do the same for each of its children
 	for (unsigned int i = 0; i < node->mNumChildren; i++)
 	{
-		ProcessNode(meshes, node->mChildren[i], scene);
+		ProcessNode(meshes, node->mChildren[i], scene, directory);
 	}
 }
 
@@ -155,39 +186,39 @@ Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene, const string directory)
 	return Mesh(vertices, indices, textures);
 }
 
-vector<Texture> LoadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName)
-{
-	vector<Texture> textures;
-	for (unsigned int i = 0; i < mat->GetTextureCount(type); i++)
-	{
-		aiString str;
-		mat->GetTexture(type, i, &str);
+//vector<Texture> LoadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName)
+//{
+//	vector<Texture> textures;
+//	for (unsigned int i = 0; i < mat->GetTextureCount(type); i++)
+//	{
+//		aiString str;
+//		mat->GetTexture(type, i, &str);
+//
+//		bool skip = false;
+//		for (unsigned int j = 0; j < texturesLoaded.size(); j++)
+//		{
+//			if (strcmp(texturesLoaded[j].path.data(), str.C_Str()) == 0)
+//			{
+//				textures.push_back(texturesLoaded[j]);
+//				skip = true;
+//				break;
+//			}
+//		}
+//		if (!skip) // if textures hasn't been loaded already, load it
+//		{
+//			Texture texture;
+//			texture.id = TextureFromFile(str.C_Str(), directory);
+//			texture.type = typeName;
+//			texture.path = str.C_Str();
+//			textures.push_back(texture);
+//			texturesLoaded.push_back(texture);
+//		}
+//	}
+//
+//	return textures;
+//}
 
-		bool skip = false;
-		for (unsigned int j = 0; j < texturesLoaded.size(); j++)
-		{
-			if (strcmp(texturesLoaded[j].path.data(), str.C_Str()) == 0)
-			{
-				textures.push_back(texturesLoaded[j]);
-				skip = true;
-				break;
-			}
-		}
-		if (!skip) // if textures hasn't been loaded already, load it
-		{
-			Texture texture;
-			texture.id = TextureFromFile(str.C_Str(), directory);
-			texture.type = typeName;
-			texture.path = str.C_Str();
-			textures.push_back(texture);
-			texturesLoaded.push_back(texture);
-		}
-	}
-
-	return textures;
-}
-
-unsigned int TextureFromFile(const char* path, const string& directory, bool gamma)
+/*unsigned int TextureFromFile(const char* path, const string& directory, bool gamma)
 {
 	string filename = string(path);
 	filename = directory + '/' + filename;
@@ -195,7 +226,7 @@ unsigned int TextureFromFile(const char* path, const string& directory, bool gam
 	unsigned int textureID;
 	glGenTextures(1, &textureID);
 
-	/*int width, height, nrComponents;
+	int width, height, nrComponents;
 	unsigned char* data = stbi_load(filename.c_str(), &width, &height, &nrComponents, 0);
 	if (data)
 	{
@@ -222,7 +253,7 @@ unsigned int TextureFromFile(const char* path, const string& directory, bool gam
 	{
 		std::cout << "Texture failed to load at path: " << path << std::endl;
 		stbi_image_free(data);
-	}*/
+	}
 
 	return textureID;
-}
+}*/

@@ -21,13 +21,10 @@
     <ClCompile Include="Mesh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="GameObject.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Shader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Material.cpp">
+    <ClCompile Include="..\GameObject.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -35,27 +32,24 @@
     <ClInclude Include="Mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="GameObject.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\Shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Material.h">
+    <ClInclude Include="..\GameObject.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="vertex.vert">
+    <None Include="..\Shaders\fragment.frag">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="fragment.frag">
+    <None Include="..\Shaders\fragment_basic.frag">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="fragment_basic.frag">
+    <None Include="..\Shaders\vertex.vert">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="vertex_basic.vert">
+    <None Include="..\Shaders\vertex_basic.vert">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
