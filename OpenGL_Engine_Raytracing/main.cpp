@@ -17,6 +17,7 @@
 #include "../GameObject.h"
 
 using namespace std;
+using namespace AB;
 
 // the window's width and height
 int width = 1280, height = 720;
@@ -60,7 +61,7 @@ void init()
     oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
 
     // set up shader
-    shader = Shader("vertex_basic.vert", "fragment_basic.frag");
+    shader = Shader("../Shaders/vertex_basic.vert", "../Shaders/fragment_basic.frag");
 
     // set up scene models
     smallSphere = GameObject("Assets/sphere.fbx");

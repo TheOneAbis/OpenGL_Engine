@@ -11,118 +11,14 @@
 using namespace std;
 using namespace AB;
 
-unsigned int TextureFromFile(const char* path, const string& directory, bool gamma = false);
+//////////////////////////////////////////////////////////////////////
+// 
+//	The below helper functions utilize the assimp API to load in    
+//	models from an FBX, OBJ, or other 3D model file format.
+// 
+//////////////////////////////////////////////////////////////////////
 
-GameObject::GameObject(GameObject* parent, Mesh mesh, Transform tm)
-{
-	this->parent = parent;
-	localTm = tm;
-	this->mesh = mesh;
-}
-
-GameObject::GameObject(GameObject* parent, const char* path, Transform localT)
-{
-	this->parent = parent;
-
-	SetLocalTM(localT);
-
-	LoadModel(path);
-}
-
-void GameObject::Draw(Shader& shader)
-{
-	glm::mat4x4 world = glm::scale(glm::translate(glm::mat4x4(), worldTm.GetTranslation()), worldTm.GetScale());
-	world *= glm::toMat4(worldTm.GetRotation());
-
-	shader.SetMatrix4x4("world", world);
-	shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
-
-	shader.SetVector3("albedoColor", material.albedo);
-	shader.SetFloat("metallic", material.metallic);
-	shader.SetFloat("specular", material.specular);
-
-	// draw this mesh
-	mesh.Draw(shader);
-
-	// draw children meshes, for those that have one
-	for (auto& child : children)
-	{
-		child.Draw(shader);
-	}
-}
-
-Transform GameObject::GetWorldTM()
-{
-	return worldTm;
-}
-Transform GameObject::GetLocalTM()
-{
-	return localTm;
-}
-
-// world transform
-void GameObject::SetWorldTM(Transform newT)
-{
-	worldTm = newT;
-}
-void GameObject::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
-{
-	SetWorldTM(Transform(translation, rotation, scale));
-}
-
-// local transform
-void GameObject::SetLocalTM(Transform newT)
-{
-	localTm = newT;
-}
-void GameObject::SetLocalTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
-{
-	SetLocalTM(Transform(translation, rotation, scale));
-}
-
-Material& GameObject::GetMaterial()
-{
-	return material;
-}
-
-Mesh& GameObject::GetMesh()
-{
-	return mesh;
-}
-
-void GameObject::LoadModel(string path)
-{
-	Assimp::Importer import;
-	// if model doesn't entirely consist of tri's, transform them to tri's first
-	const aiScene* scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
-
-	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
-	{
-		cout << "ASSIMP ERROR: " << import.GetErrorString() << endl;
-		return;
-	}
-
-	ProcessNode(children, scene->mRootNode, scene, path.substr(0, path.find_last_of('/')));
-}
-
-void ProcessNode(vector<GameObject>& children, aiNode* node, const aiScene* scene, const string directory)
-{
-	// process all the node's meshes (if any)
-	for (unsigned int i = 0; i < node->mNumMeshes; i++)
-	{
-		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-
-		GameObject child(ProcessMesh(mesh, scene, directory))
-		children.push_back(child);
-	}
-	// then do the same for each of its children
-	for (unsigned int i = 0; i < node->mNumChildren; i++)
-	{
-		ProcessNode(meshes, node->mChildren[i], scene, directory);
-	}
-}
-
-Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene, const string directory)
+static Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene, const string directory)
 {
 	vector<Vertex> vertices;
 	vector<unsigned int> indices;
@@ -184,6 +80,166 @@ Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene, const string directory)
 	//}
 
 	return Mesh(vertices, indices, textures);
+}
+
+static void ProcessNode(vector<Mesh>& meshes, aiNode* node, const aiScene* scene, const string directory)
+{
+	// process all the node's meshes (if any)
+	for (unsigned int i = 0; i < node->mNumMeshes; i++)
+	{
+		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+		meshes.push_back(ProcessMesh(mesh, scene, directory));
+	}
+	// then do the same for each of its children
+	for (unsigned int i = 0; i < node->mNumChildren; i++)
+	{
+		ProcessNode(meshes, node->mChildren[i], scene, directory);
+	}
+}
+
+static vector<Mesh> LoadModelMeshes(string path)
+{
+	vector<Mesh> meshes;
+	Assimp::Importer import;
+	// if model doesn't entirely consist of tri's, transform them to tri's first
+	const aiScene * scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+
+	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+	{
+		cout << "ASSIMP ERROR: " << import.GetErrorString() << endl;
+		return meshes;
+	}
+
+	// Process all nodes and add them as child game objects
+	ProcessNode(meshes, scene->mRootNode, scene, path.substr(0, path.find_last_of('/')));
+	return meshes;
+}
+
+// GameObject definitions
+GameObject::GameObject(vector<Mesh> meshes, Transform localT, GameObject* parent)
+{
+	this->parent = parent;
+	if (parent)
+	{
+		this->parent->children.push_back(this);
+	}
+	
+	SetLocalTM(localT);
+	this->meshes = meshes;
+}
+
+GameObject::GameObject(const char* path, Transform localT, GameObject* parent)
+{
+	*this = GameObject(LoadModelMeshes(path), localT, parent);
+}
+
+GameObject::~GameObject()
+{
+	// remove this from its parent's children
+	if (parent)
+	{
+		parent->children.erase(find(parent->children.begin(), parent->children.end(), this));
+	}
+
+	// add the children to this parent's children
+	for (auto& child : children)
+	{
+		child->parent = this->parent;
+		if (parent)
+		{
+			parent->children.push_back(child);
+		}
+	}
+}
+
+void GameObject::Draw(Shader& shader)
+{
+	glm::mat4x4 world = glm::scale(glm::translate(glm::mat4x4(), worldTm.GetTranslation()), worldTm.GetScale());
+	world *= glm::toMat4(worldTm.GetRotation());
+
+	shader.SetMatrix4x4("world", world);
+	shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
+
+	shader.SetVector3("albedoColor", material.albedo);
+	shader.SetFloat("metallic", material.metallic);
+	shader.SetFloat("specular", material.specular);
+
+	// draw all meshes on this object
+	for (Mesh& mesh : meshes)
+	{
+		mesh.Draw(shader);
+	}
+}
+
+Transform GameObject::GetWorldTM()
+{
+	return worldTm;
+}
+Transform GameObject::GetLocalTM()
+{
+	return localTm;
+}
+
+// world transform
+void GameObject::SetWorldTM(Transform newT)
+{
+	worldTm = newT;
+}
+void GameObject::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
+{
+	SetWorldTM(Transform(translation, rotation, scale));
+}
+
+// local transform
+void GameObject::SetLocalTM(Transform newT)
+{
+	localTm = newT;
+}
+void GameObject::SetLocalTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
+{
+	SetLocalTM(Transform(translation, rotation, scale));
+}
+
+Material& GameObject::GetMaterial()
+{
+	return material;
+}
+
+vector<GameObject*> GameObject::GetChildren()
+{
+	return children;
+}
+vector<GameObject*> GameObject::GetDescendants()
+{
+	vector<GameObject*> descendants;
+	
+	// breadth-first
+	if (!children.empty())
+	{
+		descendants.insert(descendants.end(), children.begin(), children.end());
+	}
+
+	for (auto& child : children)
+	{
+		vector<GameObject*> childDescendants = child->GetDescendants();
+		if (!childDescendants.empty())
+			descendants.insert(descendants.end(), childDescendants.begin(), childDescendants.end());
+	}
+
+	return descendants;
+}
+GameObject* GameObject::GetChild(int index)
+{
+	return children[index];
+}
+GameObject* GameObject::GetParent()
+{
+	return parent;
+}
+
+vector<Mesh>& GameObject::GetMeshes()
+{
+	return meshes;
 }
 
 //vector<Texture> LoadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName)

@@ -19,14 +19,8 @@ using namespace AB;
 // the window's width and height
 glm::vec2 windowSize(1280, 720);
 
-struct Vertex
-{
-    glm::vec2 pos;
-    glm::vec3 color;
-};
-
-GameObject body;
-Vertex mousePos;
+// the body parts
+GameObject torso, chest, neck head, ;
 
 glm::vec3 drawColor;
 GLenum drawMode = GL_POINTS;
@@ -39,11 +33,6 @@ void init()
     shader = Shader("../Shaders/vertex_basic.vert", "../Shaders/fragment_basic.frag");
 
     drawColor = glm::vec3();
-    mousePos =
-    {
-        glm::vec2(),
-        drawColor
-    };
 }
 
 // called when the GL context need to be rendered

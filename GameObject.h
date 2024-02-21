@@ -12,9 +12,9 @@ namespace AB
 	public:
 
 		GameObject() = default;
-		GameObject(GameObject* parent = nullptr, const char* path, Transform tm = Transform());
-		GameObject(GameObject* parent = nullptr, Mesh mesh, Transform tm = Transform());
-		~GameObject() = default;
+		GameObject(const char* path, Transform tm = Transform(), GameObject* parent = nullptr);
+		GameObject(std::vector<Mesh> meshes, Transform tm = Transform(), GameObject* parent = nullptr);
+		~GameObject();
 
 		void Draw(Shader& shader);
 
@@ -27,22 +27,20 @@ namespace AB
 		void SetLocalTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
 
 		Material& GetMaterial();
-		Mesh& GetMesh();
+		std::vector<Mesh>& GetMeshes();
 
-		std::vector<GameObject> GetChildren();
-		std::vector<GameObject> GetDescendants();
-		GameObject& GetChild(int index);
-		GameObject& GetParent();
+		std::vector<GameObject*> GetChildren();
+		std::vector<GameObject*> GetDescendants();
+		GameObject* GetChild(int index);
+		GameObject* GetParent();
 
 	private:
 
-		Mesh mesh;
+		std::vector<Mesh> meshes;
 		Transform localTm, worldTm;
 		Material material;
 
-		std::vector<GameObject> children;
+		std::vector<GameObject*> children;
 		GameObject* parent = nullptr;
-
-		void LoadModel(std::string path);
 	};
 }
