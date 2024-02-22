@@ -11,12 +11,14 @@ namespace AB
 	{
 	public:
 
-		GameObject() = default;
-		GameObject(const char* path, Transform tm = Transform(), GameObject* parent = nullptr);
-		GameObject(std::vector<Mesh> meshes, Transform tm = Transform(), GameObject* parent = nullptr);
+		GameObject();
+		GameObject(GameObject&& other);
+
+		GameObject(const char* path, std::string name = "Game Object", Transform tm = Transform(), GameObject* parent = nullptr);
+		GameObject(std::vector<Mesh> meshes, std::string name = "Game Object", Transform tm = Transform(), GameObject* parent = nullptr);
 		~GameObject();
 
-		void Draw(Shader& shader);
+		void Draw(Shader& shader, int drawMode = GL_TRIANGLES);
 
 		Transform GetWorldTM();
 		Transform GetLocalTM();
@@ -34,6 +36,8 @@ namespace AB
 		GameObject* GetChild(int index);
 		GameObject* GetParent();
 
+		std::string GetName();
+
 	private:
 
 		std::vector<Mesh> meshes;
@@ -41,6 +45,8 @@ namespace AB
 		Material material;
 
 		std::vector<GameObject*> children;
-		GameObject* parent = nullptr;
+		GameObject* parent;
+
+		std::string name;
 	};
 }

@@ -51,4 +51,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\Shaders\vert2d.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Shaders\frag2d.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
 </Project>

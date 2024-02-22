@@ -115,8 +115,29 @@ static vector<Mesh> LoadModelMeshes(string path)
 	return meshes;
 }
 
-// GameObject definitions
-GameObject::GameObject(vector<Mesh> meshes, Transform localT, GameObject* parent)
+
+/////////////////////////////////////////////////////
+//    ------- GameObject definitions ---------     //
+/////////////////////////////////////////////////////
+
+GameObject::GameObject()
+{
+	this->parent = nullptr;
+	this->name = "Game Object";
+}
+GameObject::GameObject(GameObject&& other)
+{
+	this->parent = other.parent;
+	if (other.parent)
+	{
+		this->parent->children.push_back(this);
+	}
+	
+	this->meshes = other.meshes;
+	this->name = other.name;
+	SetLocalTM(other.GetLocalTM());
+}
+GameObject::GameObject(vector<Mesh> meshes, string name, Transform localT, GameObject* parent)
 {
 	this->parent = parent;
 	if (parent)
@@ -124,19 +145,27 @@ GameObject::GameObject(vector<Mesh> meshes, Transform localT, GameObject* parent
 		this->parent->children.push_back(this);
 	}
 	
-	SetLocalTM(localT);
 	this->meshes = meshes;
+	this->name = name;
+	SetLocalTM(localT);
 }
-
-GameObject::GameObject(const char* path, Transform localT, GameObject* parent)
+GameObject::GameObject(const char* path, string name, Transform localT, GameObject* parent)
 {
-	*this = GameObject(LoadModelMeshes(path), localT, parent);
+	this->parent = parent;
+	if (parent)
+	{
+		this->parent->children.push_back(this);
+	}
+
+	this->meshes = LoadModelMeshes(path);
+	this->name = name;
+	SetLocalTM(localT);
 }
 
 GameObject::~GameObject()
 {
 	// remove this from its parent's children
-	if (parent)
+	if (parent && !parent->children.empty())
 	{
 		parent->children.erase(find(parent->children.begin(), parent->children.end(), this));
 	}
@@ -145,17 +174,16 @@ GameObject::~GameObject()
 	for (auto& child : children)
 	{
 		child->parent = this->parent;
-		if (parent)
+		if (parent && !parent->children.empty())
 		{
 			parent->children.push_back(child);
 		}
 	}
 }
 
-void GameObject::Draw(Shader& shader)
+void GameObject::Draw(Shader& shader, int drawMode)
 {
-	glm::mat4x4 world = glm::scale(glm::translate(glm::mat4x4(), worldTm.GetTranslation()), worldTm.GetScale());
-	world *= glm::toMat4(worldTm.GetRotation());
+	glm::mat4x4 world = worldTm.GetMatrix();
 
 	shader.SetMatrix4x4("world", world);
 	shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
@@ -167,7 +195,7 @@ void GameObject::Draw(Shader& shader)
 	// draw all meshes on this object
 	for (Mesh& mesh : meshes)
 	{
-		mesh.Draw(shader);
+		mesh.Draw(shader, drawMode);
 	}
 }
 
@@ -183,7 +211,7 @@ Transform GameObject::GetLocalTM()
 // world transform
 void GameObject::SetWorldTM(Transform newT)
 {
-	worldTm = newT;
+	SetLocalTM(parent ? glm::inverse(parent->worldTm.GetMatrix()) * worldTm.GetMatrix() : newT);
 }
 void GameObject::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
 {
@@ -194,6 +222,13 @@ void GameObject::SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3
 void GameObject::SetLocalTM(Transform newT)
 {
 	localTm = newT;
+	worldTm = parent ? parent->worldTm.GetMatrix() * localTm.GetMatrix() : localTm;
+
+	// tell children to update their world transforms accordingly
+	for (auto& child : children)
+	{
+		child->SetLocalTM(child->GetLocalTM());
+	}
 }
 void GameObject::SetLocalTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale)
 {
@@ -230,6 +265,9 @@ vector<GameObject*> GameObject::GetDescendants()
 }
 GameObject* GameObject::GetChild(int index)
 {
+	if (index < 0 || index >= children.size())
+		return nullptr;
+
 	return children[index];
 }
 GameObject* GameObject::GetParent()
@@ -240,6 +278,11 @@ GameObject* GameObject::GetParent()
 vector<Mesh>& GameObject::GetMeshes()
 {
 	return meshes;
+}
+
+string GameObject::GetName()
+{
+	return name;
 }
 
 //vector<Texture> LoadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName)

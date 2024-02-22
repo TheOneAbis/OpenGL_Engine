@@ -11,6 +11,7 @@ namespace AB
 
 		Transform();
 		Transform(glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
+		Transform(glm::mat4 matrix);
 
 		~Transform() = default;
 
@@ -31,11 +32,17 @@ namespace AB
 		glm::vec3 GetUp();
 		glm::vec3 GetRight();
 
+		glm::mat4 GetMatrix();
+
 	private:
+
+		inline void UpdateMatrix();
 
 		glm::vec3 translation;
 		glm::quat rotation;
 		glm::vec3 scale;
+		glm::mat4 matrix;
+		bool dirty;
 
 	};
 }
