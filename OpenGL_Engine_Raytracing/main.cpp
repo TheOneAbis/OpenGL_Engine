@@ -15,6 +15,7 @@
 
 #include <iostream>
 #include "../GameObject.h"
+#include "../Input.h"
 
 using namespace std;
 using namespace AB;
@@ -42,26 +43,36 @@ enum LightType : int
 
 vector<Light> lights;
 Shader shader;
+GameObject screenTri;
 GameObject smallSphere, bigSphere, cone;
 GameObject mFloor;
 std::vector<GameObject> gameObjects;
 
-glm::vec3 camVel;
 Transform camTM;
 
 float dt, oldT;
+
+unsigned int vertices;
 
 void init()
 {
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
 
-    // set up camera
-    camVel = {};
     oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
 
     // set up shader
-    shader = Shader("../Shaders/vertex_basic.vert", "../Shaders/fragment_basic.frag");
+    shader = Shader("../Shaders/vert_screen.vert", "../Shaders/frag_raytracing.frag");
+    Mesh tri(
+        {
+            {glm::vec3(-1, 1, 0), glm::vec3(), glm::vec2()},
+            {glm::vec3(-1, -3, 0), glm::vec3(), glm::vec2()},
+            {glm::vec3(3, 1, 0), glm::vec3(), glm::vec2()}
+        }, 
+        {0, 1, 2}, {});
+    screenTri = GameObject({ tri });
+    // set the background color
+    screenTri.GetMaterial().albedo = glm::vec3(0.25f, 0.61f, 1.f);
 
     // set up scene models
     smallSphere = GameObject("Assets/sphere.fbx");
@@ -79,7 +90,7 @@ void init()
     mat = &cone.GetMaterial();
     mat->albedo = { 0.8f, 0.3f, 0.1f };
     mat->specular = 0.2f;
-
+    
     mFloor = GameObject({ Mesh(
         {
             { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
@@ -117,9 +128,25 @@ void Tick()
     dt = newT - oldT;
     oldT = newT;
 
+    glm::vec3 camVel = {};
+    if (Input::Get().KeyDown('w'))
+        camVel.z = 1.f;
+    if (Input::Get().KeyDown('a'))
+        camVel.x = -1.f;
+    if (Input::Get().KeyDown('s'))
+        camVel.z = -1.f;
+    if (Input::Get().KeyDown('d'))
+        camVel.x = 1.f;
+    if (Input::Get().KeyDown('q'))
+        camVel.y = -1.f;
+    if (Input::Get().KeyDown('e'))
+        camVel.y = 1.f;
+
     glm::vec3 t = glm::normalize(camVel);
     if (!isnan(t.x))
         camTM.Translate(t * camTM.GetRotation() * dt * 3.f);
+
+    Input::Get().Update();
 
     glutPostRedisplay();
 }
@@ -128,26 +155,19 @@ void Tick()
 void display(void)
 {
     // clear the screen to white, which is the background color
-    glClearColor(0.1, 0.1, 0.1, 0.0);
+    glClearColor(0.1f, 0.1f, 0.1f, 0.f);
 
     // clear the buffer stored for drawing
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
-    glm::mat4x4 world = glm::mat4x4(1.f);
-    glm::mat4x4 view = glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() + camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f));
-
     // use the shader program
     shader.use();
-    shader.SetMatrix4x4("view", view);
+
+    shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() + camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
-
-    // set ambient color
-    shader.SetVector3("ambient", glm::vec3(0.05f, 0.05f, 0.05f));
-
-    for (auto& model : gameObjects)
-    {
-        model.Draw(shader);
-    }
+    
+    
+    screenTri.Draw(shader);
 
     glutSwapBuffers();
 }
@@ -163,32 +183,6 @@ void reshape(int w, int h)
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
 
     glutPostRedisplay();
-}
-
-void processKeyInput(unsigned char key, int xMouse, int yMouse)
-{
-    if (key == 'w')
-        camVel.z = 1.f;
-    if (key == 'a')
-        camVel.x = 1.f;
-    if (key == 's')
-        camVel.z = -1.f;
-    if (key == 'd')
-        camVel.x = -1.f;
-    if (key == 'e')
-        camVel.y = 1.f;
-    if (key == 'q')
-        camVel.y = -1.f;
-}
-
-void processKeyUpInput(unsigned char key, int xMouse, int yMouse)
-{
-    if (key == 'w' || key == 's')
-        camVel.z = 0;
-    if (key == 'a' || key == 'd')
-        camVel.x = 0;
-    if (key == 'q' || key == 'e')
-        camVel.y = 0;
 }
 
 void processMouse(int button, int state, int x, int y)
@@ -235,10 +229,7 @@ int main(int argc, char* argv[])
     glutIdleFunc(Tick);
 
     // Processing input
-    glutKeyboardFunc(processKeyInput);
-    glutKeyboardUpFunc(processKeyUpInput);
-    glutMouseFunc(processMouse);
-    glutPassiveMotionFunc(MouseMotion);
+    Input::Get().Init();
 
     //start the glut main loop
     glutMainLoop();

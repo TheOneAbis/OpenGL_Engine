@@ -12,7 +12,10 @@ namespace AB
 	public:
 
 		GameObject();
-		GameObject(GameObject&& other);
+		GameObject(GameObject&& other) noexcept;
+		GameObject(const GameObject& other);
+		void operator=(GameObject&& other) noexcept;
+		void operator=(const GameObject& other);
 
 		GameObject(const char* path, std::string name = "Game Object", Transform tm = Transform(), GameObject* parent = nullptr);
 		GameObject(std::vector<Mesh> meshes, std::string name = "Game Object", Transform tm = Transform(), GameObject* parent = nullptr);
@@ -39,6 +42,8 @@ namespace AB
 		std::string GetName();
 
 	private:
+
+		void SetParams(std::vector<Mesh> meshes, std::string name, Transform localT, GameObject* parent);
 
 		std::vector<Mesh> meshes;
 		Transform localTm, worldTm;

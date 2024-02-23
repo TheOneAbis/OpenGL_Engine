@@ -119,47 +119,52 @@ static vector<Mesh> LoadModelMeshes(string path)
 /////////////////////////////////////////////////////
 //    ------- GameObject definitions ---------     //
 /////////////////////////////////////////////////////
+void GameObject::SetParams(vector<Mesh> meshes, string name, Transform localT, GameObject* parent)
+{
+	this->parent = parent;
+	if (parent)
+	{
+		this->parent->children.push_back(this);
+	}
+
+	this->meshes = meshes;
+	this->name = name;
+	SetLocalTM(localT);
+}
 
 GameObject::GameObject()
 {
 	this->parent = nullptr;
 	this->name = "Game Object";
 }
-GameObject::GameObject(GameObject&& other)
+GameObject::GameObject(GameObject&& other) noexcept
 {
-	this->parent = other.parent;
-	if (other.parent)
-	{
-		this->parent->children.push_back(this);
-	}
-	
-	this->meshes = other.meshes;
-	this->name = other.name;
-	SetLocalTM(other.GetLocalTM());
+	SetParams(other.meshes, other.name, other.localTm, other.parent);
+	this->material = other.material;
 }
+GameObject::GameObject(const GameObject& other)
+{
+	SetParams(other.meshes, other.name, other.localTm, other.parent);
+	this->material = other.material;
+}
+void GameObject::operator=(GameObject&& other) noexcept
+{
+	SetParams(other.meshes, other.name, other.localTm, other.parent);
+	this->material = other.material;
+}
+void GameObject::operator=(const GameObject& other)
+{
+	SetParams(other.meshes, other.name, other.localTm, other.parent);
+	this->material = other.material;
+}
+
 GameObject::GameObject(vector<Mesh> meshes, string name, Transform localT, GameObject* parent)
 {
-	this->parent = parent;
-	if (parent)
-	{
-		this->parent->children.push_back(this);
-	}
-	
-	this->meshes = meshes;
-	this->name = name;
-	SetLocalTM(localT);
+	SetParams(meshes, name, localT, parent);
 }
 GameObject::GameObject(const char* path, string name, Transform localT, GameObject* parent)
 {
-	this->parent = parent;
-	if (parent)
-	{
-		this->parent->children.push_back(this);
-	}
-
-	this->meshes = LoadModelMeshes(path);
-	this->name = name;
-	SetLocalTM(localT);
+	SetParams(LoadModelMeshes(path), name, localT, parent);
 }
 
 GameObject::~GameObject()

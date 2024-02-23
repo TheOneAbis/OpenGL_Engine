@@ -30,6 +30,9 @@
     <ClCompile Include="..\Transform.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\Input.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Shader.h">
@@ -44,18 +47,24 @@
     <ClInclude Include="..\Transform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\Input.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\Shaders\fragment.frag">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="..\Shaders\fragment_basic.frag">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="..\Shaders\vertex.vert">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="..\Shaders\vertex_basic.vert">
+    <None Include="..\Shaders\vert_basic.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Shaders\vert_screen.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Shaders\frag_raytracing.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="..\Shaders\vert2d.vert">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
