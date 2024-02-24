@@ -154,6 +154,7 @@
     <ClInclude Include="..\Transform.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\Shaders\frag_lit_pbr.frag" />
     <None Include="..\Shaders\frag_raytracing.frag" />
     <None Include="..\Shaders\vert2d.vert" />
     <None Include="..\Shaders\vertex.vert" />

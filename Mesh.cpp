@@ -47,22 +47,25 @@ void Mesh::Draw(Shader& shader, int drawMode)
     unsigned int diffuseNr = 1;
     unsigned int specularNr = 1;
 
-    for (unsigned int i = 0; i < textures.size(); i++)
+    if (!textures.empty())
     {
-        glActiveTexture(GL_TEXTURE0 + i); // activate proper texture unit before binding
+        for (unsigned int i = 0; i < textures.size(); i++)
+        {
+            glActiveTexture(GL_TEXTURE0 + i); // activate proper texture unit before binding
 
-        // retreive texture number (the N in diffuse_textureN)
-        string number;
-        string name = textures[i].type;
-        if (name == "texture_diffuse")
-            number = to_string(diffuseNr++);
-        else if (name == "texture_specular")
-            number = to_string(specularNr++);
+            // retreive texture number (the N in diffuse_textureN)
+            string number;
+            string name = textures[i].type;
+            if (name == "texture_diffuse")
+                number = to_string(diffuseNr++);
+            else if (name == "texture_specular")
+                number = to_string(specularNr++);
 
-        shader.SetInt(("material." + name + number).c_str(), i);
-        glBindTexture(GL_TEXTURE_2D, textures[i].id);
+            shader.SetInt(("material." + name + number).c_str(), i);
+            glBindTexture(GL_TEXTURE_2D, textures[i].id);
+        }
+        glActiveTexture(GL_TEXTURE0);
     }
-    glActiveTexture(GL_TEXTURE0);
 
     // draw mesh
     glBindVertexArray(VAO);

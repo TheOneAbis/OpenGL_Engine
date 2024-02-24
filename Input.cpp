@@ -17,34 +17,76 @@ bool Input::KeyDown(const char key)
 }
 bool Input::KeyPressed(const char key)
 {
-	return keymap[key] && prevkeymap[key];
+	return keymap[key] && !prevkeymap[key];
 }
 bool Input::KeyReleased(const char key)
 {
 	return !keymap[key] && prevkeymap[key];
 }
-unordered_map<char, bool>& Input::GetKeymap()
+bool Input::MouseButtonDown(int button)
+{
+	return mousemap[button];
+}
+bool Input::MouseButtonPressed(int button)
+{
+	return mousemap[button] && !prevmousemap[button];
+}
+bool Input::MouseButtonReleased(int button)
+{
+	return !mousemap[button] && prevmousemap[button];
+}
+
+unordered_map<char, bool>& Input::GetKeyMap()
 {
 	return keymap;
+}
+std::unordered_map<int, bool>& Input::GetMouseMap()
+{
+	return mousemap;
+}
+glm::vec2& Input::GetMousePos()
+{
+	return mousePos;
+}
+glm::vec2& Input::GetLastMousePos()
+{
+	return prevMousePos;
+}
+glm::vec2 Input::GetMouseDelta()
+{
+	return mousePos - prevMousePos;
 }
 
 void ProcessKeyInput(unsigned char key, int xMouse, int yMouse)
 {
-	Input::Get().GetKeymap()[key] = true;
+	Input::Get().GetKeyMap()[key] = true;
 }
 void ProcessKeyUpInput(unsigned char key, int xMouse, int yMouse)
 {
-	Input::Get().GetKeymap()[key] = false;
+	Input::Get().GetKeyMap()[key] = false;
+}
+void ProcessMouseInput(int button, int state, int x, int y)
+{
+	Input::Get().GetMouseMap()[button] = !state;
+}
+void ProcessMouseMotion(int x, int y)
+{
+	Input::Get().GetMousePos() = glm::vec2(x, y);
 }
 
 void Input::Init()
 {
 	glutKeyboardFunc(ProcessKeyInput);
 	glutKeyboardUpFunc(ProcessKeyUpInput);
+	glutMouseFunc(ProcessMouseInput);
+	glutMotionFunc(ProcessMouseMotion);
+	glutPassiveMotionFunc(ProcessMouseMotion);
 }
 void Input::Update()
 {
 	prevkeymap = keymap;
+	prevmousemap = mousemap;
+	prevMousePos = mousePos;
 }
 
 Input::~Input() {}

@@ -67,5 +67,8 @@
     <None Include="..\Shaders\vert2d.vert">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="..\Shaders\frag_lit_pbr.frag">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

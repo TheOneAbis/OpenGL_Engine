@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/constants.hpp>
 
 #ifdef __APPLE__
 #include <GLUT/glut.h> // include glut for Mac
@@ -44,15 +45,16 @@ enum LightType : int
 vector<Light> lights;
 Shader shader;
 GameObject screenTri;
-GameObject smallSphere, bigSphere, cone;
-GameObject mFloor;
+GameObject smallSphere, bigSphere, cone, mFloor;
 std::vector<GameObject> gameObjects;
 
 Transform camTM;
-
+glm::vec2 camEulers;
 float dt, oldT;
 
-unsigned int vertices;
+unsigned int vertBuffer, indexBuffer, worldMatrices;
+unsigned int vertTex, indexTex, worldMatricesTex;
+int indexCount = 0;
 
 void init()
 {
@@ -103,7 +105,7 @@ void init()
     mFloor.SetWorldTM(Transform({-1, -1, 0}, glm::quat(), {3, 1, 5}));
     mFloor.GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
 
-    gameObjects = { smallSphere, bigSphere, cone, mFloor };
+    gameObjects = { smallSphere };
 
     // set up lights
     Light point = {};
@@ -120,6 +122,58 @@ void init()
     dirLight.Color = glm::vec3(1.f, 1.f, 1.f);
     dirLight.Intensity = 3.f;
     lights.push_back(dirLight);
+
+    // create the giant vertex buffer
+    vector<glm::vec4> vertData;
+    vector<unsigned int> indexData;
+    vector<glm::mat4> worldMatData;
+    for (auto& obj : gameObjects)
+    {
+        worldMatData.push_back(obj.GetWorldTM().GetMatrix());
+
+        for (auto& mesh : obj.GetMeshes())
+        {
+            indexData.insert(indexData.begin(), mesh.indices.begin(), mesh.indices.end());
+            for (auto& vert : mesh.vertices)
+            {
+                // store which world matrix this vert should use in its w coord
+                vertData.push_back(glm::vec4(vert.Position, worldMatData.size() - 1));
+                vertData.push_back(glm::vec4(vert.Normal, worldMatData.size() - 1));
+                vertData.push_back(glm::vec4(vert.TexCoord, 0, worldMatData.size() - 1));
+            }
+        }
+    }
+    
+    // generate the buffers
+    glGenBuffers(1, &vertBuffer);
+    glGenBuffers(1, &indexBuffer);
+    glGenBuffers(1, &worldMatrices);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * vertData.size(), &vertData[0], GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, indexBuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(unsigned int) * indexData.size(), &indexData[0], GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, worldMatrices);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * worldMatData.size(), &worldMatData[0], GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // gen texture buffers and attach the above buffer objects to them
+    glGenTextures(1, &vertTex);
+    glGenTextures(1, &indexTex);
+    glGenTextures(1, &worldMatricesTex);
+
+    glBindTexture(GL_TEXTURE_BUFFER, vertTex);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, vertBuffer);
+    glBindTexture(GL_TEXTURE_BUFFER, indexTex);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, indexBuffer);
+    glBindTexture(GL_TEXTURE_BUFFER, worldMatricesTex);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, worldMatrices);
+    
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
+
+    // set the sampler buffers
+    indexCount = indexData.size();
 }
 
 void Tick()
@@ -127,6 +181,12 @@ void Tick()
     float newT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
     dt = newT - oldT;
     oldT = newT;
+
+    if (Input::Get().MouseButtonDown(2))
+    {
+        camEulers += Input::Get().GetMouseDelta();
+        camTM.SetRotationEulersZYX(glm::vec3(-camEulers.y * 0.0025f, camEulers.x * 0.0025f, 0.f));
+    }
 
     glm::vec3 camVel = {};
     if (Input::Get().KeyDown('w'))
@@ -163,10 +223,23 @@ void display(void)
     // use the shader program
     shader.use();
 
-    shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() + camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
-    shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
-    
-    
+    //shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() + camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
+    //shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
+    shader.SetMatrix4x4("cameraWorld", camTM.GetMatrix());
+    shader.SetFloat("aspectRatio", (float)width / (float)height);
+    shader.SetFloat("cameraFOV", glm::pi<float>() / 2.f);
+    shader.SetInt("indexCount", indexCount);
+
+    // bind the texture buffers to their respective texture units as defined in the frag shader
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_BUFFER, vertTex);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_BUFFER, indexTex);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_BUFFER, worldMatricesTex);
+
+    glActiveTexture(GL_TEXTURE0);
+
     screenTri.Draw(shader);
 
     glutSwapBuffers();
@@ -183,15 +256,6 @@ void reshape(int w, int h)
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
 
     glutPostRedisplay();
-}
-
-void processMouse(int button, int state, int x, int y)
-{
-}
-
-void MouseMotion(int x, int y)
-{
-    camTM.SetRotationEulersZYX(glm::vec3(-y * 0.0025f, x * 0.0025f, 0.f));
 }
 
 int main(int argc, char* argv[])
