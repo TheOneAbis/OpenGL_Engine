@@ -44,7 +44,7 @@ enum LightType : int
 
 vector<Light> lights;
 Shader shader;
-GameObject screenTri;
+Mesh tri;
 GameObject smallSphere, bigSphere, cone, mFloor;
 std::vector<GameObject> gameObjects;
 
@@ -65,30 +65,27 @@ void init()
 
     // set up shader
     shader = Shader("../Shaders/vert_screen.vert", "../Shaders/frag_raytracing.frag");
-    Mesh tri(
+    tri = Mesh(
         {
-            {glm::vec3(-1, 1, 0), glm::vec3(), glm::vec2()},
-            {glm::vec3(-1, -3, 0), glm::vec3(), glm::vec2()},
-            {glm::vec3(3, 1, 0), glm::vec3(), glm::vec2()}
+            { glm::vec3(-1, 1, 0), glm::vec3(), glm::vec2() },
+            { glm::vec3(-1, -3, 0), glm::vec3(), glm::vec2() },
+            { glm::vec3(3, 1, 0), glm::vec3(), glm::vec2() }
         }, 
         {0, 1, 2}, {});
-    screenTri = GameObject({ tri });
-    // set the background color
-    screenTri.GetMaterial().albedo = glm::vec3(0.25f, 0.61f, 1.f);
 
     // set up scene models
     smallSphere = GameObject("Assets/sphere.fbx");
-    smallSphere.SetWorldTM({1.5f, 0.f, 3.25f}, glm::quat(), {0.75f, 0.75f, 0.75f});
+    smallSphere.SetWorldTM({-1.f, -0.5f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
     smallSphere.GetMaterial().albedo = { 0.3f, 0.3f, 0.1f };
 
     bigSphere = GameObject("Assets/sphere.fbx");
-    bigSphere.SetWorldTM({ 0.f, 0.5f, 2.f }, glm::quat(), {1.f, 1.f, 1.f});
+    bigSphere.SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
     auto* mat = &bigSphere.GetMaterial();
     mat->albedo = { 0.5f, 0.1f, 0.5f };
     mat->metallic = 0.5f;
    
     cone = GameObject("Assets/cone.obj");
-    cone.SetWorldTM({ -1.5f, 0.5f, 3.f }, glm::quat(), {1.f, 1.f, 1.f});
+    cone.SetWorldTM({ 2.f, 0.5f, -2.f }, glm::quat(), {1.f, 1.f, 1.f});
     mat = &cone.GetMaterial();
     mat->albedo = { 0.8f, 0.3f, 0.1f };
     mat->specular = 0.2f;
@@ -97,30 +94,30 @@ void init()
         {
             { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
             { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
-            { glm::vec3(1.f, 0.f, 1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) },
-            { glm::vec3(0.f, 0.f, 1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
+            { glm::vec3(1.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) },
+            { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
         }, 
-        { 0, 2, 1, 0, 3, 2 }, 
+        { 0, 1, 2, 0, 2, 3 }, 
         vector<Texture>()) });
-    mFloor.SetWorldTM(Transform({-1, -1, 0}, glm::quat(), {3, 1, 5}));
-    mFloor.GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
+    mFloor.SetWorldTM(Transform({-2, -1, 0}, glm::quat(), {3, 1, 5}));
+    mFloor.GetMaterial().albedo = { -0.2f, 0.3f, 0.9f };
 
-    gameObjects = { smallSphere };
+    gameObjects = { bigSphere, smallSphere, cone, mFloor };
 
     // set up lights
     Light point = {};
     point.Type = LIGHT_TYPE_POINT;
-    point.Color = glm::vec3(1.f, 1.f, 1.f);
-    point.Intensity = 1.f;
+    point.Color = glm::vec3(0.f, 1.f, 1.f);
+    point.Intensity = 10.f;
     point.Position = glm::vec3(-2, 0, 0);
-    point.Range = 10.f;
-    lights.push_back(point);
+    point.Range = 3.f;
+    //lights.push_back(point);
 
     Light dirLight = {};
     dirLight.Type = LIGHT_TYPE_DIRECTIONAL;
     dirLight.Direction = glm::normalize(glm::vec3(-0.3f, -1.f, -0.5f));
     dirLight.Color = glm::vec3(1.f, 1.f, 1.f);
-    dirLight.Intensity = 3.f;
+    dirLight.Intensity = 0.5f;
     lights.push_back(dirLight);
 
     // create the giant vertex buffer
@@ -133,13 +130,17 @@ void init()
 
         for (auto& mesh : obj.GetMeshes())
         {
-            indexData.insert(indexData.begin(), mesh.indices.begin(), mesh.indices.end());
+            for (auto& i : mesh.indices)
+            {
+                indexData.push_back(i + (vertData.size() / 3));
+            }
+            
             for (auto& vert : mesh.vertices)
             {
-                // store which world matrix this vert should use in its w coord
-                vertData.push_back(glm::vec4(vert.Position, worldMatData.size() - 1));
-                vertData.push_back(glm::vec4(vert.Normal, worldMatData.size() - 1));
-                vertData.push_back(glm::vec4(vert.TexCoord, 0, worldMatData.size() - 1));
+                // store which world matrix this vert should use in the position's w coord
+                vertData.push_back(glm::vec4(vert.Position, (float)worldMatData.size() - 1.f));
+                vertData.push_back(glm::vec4(vert.Normal, 1));
+                vertData.push_back(glm::vec4(vert.TexCoord, 0, 1));
             }
         }
     }
@@ -185,16 +186,16 @@ void Tick()
     if (Input::Get().MouseButtonDown(2))
     {
         camEulers += Input::Get().GetMouseDelta();
-        camTM.SetRotationEulersZYX(glm::vec3(-camEulers.y * 0.0025f, camEulers.x * 0.0025f, 0.f));
+        camTM.SetRotationEulersZYX(glm::vec3(camEulers.y * 0.0025f, camEulers.x * 0.0025f, 0.f));
     }
 
     glm::vec3 camVel = {};
     if (Input::Get().KeyDown('w'))
-        camVel.z = 1.f;
+        camVel.z = -1.f;
     if (Input::Get().KeyDown('a'))
         camVel.x = -1.f;
     if (Input::Get().KeyDown('s'))
-        camVel.z = -1.f;
+        camVel.z = 1.f;
     if (Input::Get().KeyDown('d'))
         camVel.x = 1.f;
     if (Input::Get().KeyDown('q'))
@@ -223,12 +224,24 @@ void display(void)
     // use the shader program
     shader.use();
 
-    //shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() + camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
-    //shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
-    shader.SetMatrix4x4("cameraWorld", camTM.GetMatrix());
+    shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
     shader.SetFloat("aspectRatio", (float)width / (float)height);
     shader.SetFloat("cameraFOV", glm::pi<float>() / 2.f);
+    shader.SetVector3("cameraPos", camTM.GetTranslation());
     shader.SetInt("indexCount", indexCount);
+    shader.SetVector3("ambient", glm::vec3(0.1f, 0.1f, 0.1f));
+    
+    // Lighting uniform data
+    for (unsigned int i = 0; i < lights.size(); i++)
+    {
+        shader.SetUint("lights[" + to_string(i) + "].Type", lights[i].Type);
+        shader.SetVector3("lights[" + to_string(i) + "].Direction", lights[i].Direction);
+        shader.SetFloat("lights[" + to_string(i) + "].Range", lights[i].Range);
+        shader.SetVector3("lights[" + to_string(i) + "].Position", lights[i].Position);
+        shader.SetFloat("lights[" + to_string(i) + "].Intensity", lights[i].Intensity);
+        shader.SetVector3("lights[" + to_string(i) + "].Color", lights[i].Color);
+        shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
+    }
 
     // bind the texture buffers to their respective texture units as defined in the frag shader
     glActiveTexture(GL_TEXTURE0);
@@ -240,7 +253,7 @@ void display(void)
 
     glActiveTexture(GL_TEXTURE0);
 
-    screenTri.Draw(shader);
+    tri.Draw(shader);
 
     glutSwapBuffers();
 }
