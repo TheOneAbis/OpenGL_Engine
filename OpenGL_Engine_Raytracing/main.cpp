@@ -75,7 +75,7 @@ void init()
 
     // set up scene models
     smallSphere = GameObject("Assets/sphere.fbx");
-    smallSphere.SetWorldTM({-1.f, -0.5f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
+    smallSphere.SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
     smallSphere.GetMaterial().albedo = { 0.3f, 0.3f, 0.1f };
 
     bigSphere = GameObject("Assets/sphere.fbx");
@@ -100,17 +100,17 @@ void init()
         { 0, 1, 2, 0, 2, 3 }, 
         vector<Texture>()) });
     mFloor.SetWorldTM(Transform({-2, -1, 0}, glm::quat(), {3, 1, 5}));
-    mFloor.GetMaterial().albedo = { -0.2f, 0.3f, 0.9f };
+    mFloor.GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
 
     gameObjects = { bigSphere, smallSphere, cone, mFloor };
 
     // set up lights
     Light point = {};
     point.Type = LIGHT_TYPE_POINT;
-    point.Color = glm::vec3(0.f, 1.f, 1.f);
-    point.Intensity = 10.f;
-    point.Position = glm::vec3(-2, 0, 0);
-    point.Range = 3.f;
+    point.Color = glm::vec3(1.f, 0.f, 0.f);
+    point.Intensity = 1.f;
+    point.Position = glm::vec3(-0.65, 0.25, -0.65);
+    point.Range = 5.f;
     //lights.push_back(point);
 
     Light dirLight = {};
@@ -140,7 +140,7 @@ void init()
                 // store which world matrix this vert should use in the position's w coord
                 vertData.push_back(glm::vec4(vert.Position, (float)worldMatData.size() - 1.f));
                 vertData.push_back(glm::vec4(vert.Normal, 1));
-                vertData.push_back(glm::vec4(vert.TexCoord, 0, 1));
+                vertData.push_back(glm::vec4(obj.GetMaterial().albedo, 1)); // change this later, currently just storing albedo shit
             }
         }
     }
@@ -230,6 +230,7 @@ void display(void)
     shader.SetVector3("cameraPos", camTM.GetTranslation());
     shader.SetInt("indexCount", indexCount);
     shader.SetVector3("ambient", glm::vec3(0.1f, 0.1f, 0.1f));
+    shader.SetVector3("screenColor", glm::vec3(0.3f, 0.8f, 0.8f));
     
     // Lighting uniform data
     for (unsigned int i = 0; i < lights.size(); i++)
@@ -301,12 +302,14 @@ int main(int argc, char* argv[])
     glutReshapeFunc(reshape);
 
     //register function that draws in the window
-    glutDisplayFunc(display);
+    //glutDisplayFunc(display);
 
     glutIdleFunc(Tick);
 
     // Processing input
     Input::Get().Init();
+
+    display();
 
     //start the glut main loop
     glutMainLoop();

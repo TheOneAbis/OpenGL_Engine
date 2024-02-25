@@ -21,7 +21,7 @@ struct Light
 // Basic lighting functions
 float DiffuseBRDF(vec3 normal, vec3 dirToLight)
 {
-    return clamp(dot(normal, dirToLight), 0.f, 1.f);
+    return clamp(dot(normal, dirToLight), 0, 1);
 }
 
 float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness, float roughScale)
@@ -33,7 +33,7 @@ float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness,
 
 	// Compare reflection against view vector, raising it to
 	// a very high power to ensure the falloff to zero is quick
-    return pow(clamp(dot(refl, viewVector), 0.f, 1.f), specExponent) * roughScale;
+    return pow(clamp(dot(refl, viewVector), 0, 1), specExponent) * roughScale;
 }
 
 vec3 ColorFromLight(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness, float roughnessScale)
@@ -41,9 +41,9 @@ vec3 ColorFromLight(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint,
     // Calculate diffuse and specular values
     float diffuse = DiffuseBRDF(normal, -lightDir);
     float spec = SpecularBRDF(normal, lightDir, viewVec, roughness, roughnessScale);
-    
+
     // Cut the specular if the diffuse contribution is zero
-    spec *= diffuse == 0.f ? 0.f : diffuse;
+    spec *= diffuse == 0.f ? 0.f : 1.f;
 
     return lightColor * colorTint * diffuse + spec;
 }
@@ -116,27 +116,27 @@ vec3 MicrofacetBRDF(vec3 n, vec3 l, vec3 v, float roughness, vec3 f0, out vec3 F
     F_out = F;
 
 	// Final specular formula
-    vec3 specularResult = (D * F * G) / 4.f;
+    vec3 specularResult = (D * F * G) / 4;
 
 	// According to the rendering equation,
 	// specular must have the same NdotL applied as diffuse
     return specularResult * max(dot(n, l), 0);
 }
 
-vec3 ColorFromLightPBR(vec3 normal, vec3 toLight, vec3 lightColor, vec3 surfaceColor,
-    vec3 viewVec, float lightIntensity, float roughness, float metalness, vec3 specColor)
+vec3 ColorFromLightPBR(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor,
+    vec3 viewVec, float roughness, float metalness, vec3 specColor)
 {
-    float diffuse = DiffuseBRDF(normal, toLight);
+    float diffuse = DiffuseBRDF(normal, -lightDir);
     
     vec3 fresnel;
     // Get specular color and fresnel result
-    vec3 spec = MicrofacetBRDF(normal, toLight, viewVec, roughness, specColor, fresnel);
+    vec3 spec = MicrofacetBRDF(normal, -lightDir, viewVec, roughness, specColor, fresnel);
     
     // Calculate diffuse with energy conservation, including cutting diffuse for metals
     vec3 balancedDiff = DiffuseEnergyConserve(diffuse, fresnel, metalness);
     
     // Combine the final diffuse and specular values for this light
-    return (balancedDiff * surfaceColor + spec) * lightIntensity * lightColor;
+    return (balancedDiff * surfaceColor + spec) * lightColor;
 }
 
 #define EPSILON 0.0001f
@@ -187,6 +187,7 @@ uniform int indexCount;
 // lighting params
 uniform Light[MAX_LIGHT_COUNT] lights;
 uniform vec3 ambient;
+uniform vec3 screenColor;
 
 uniform mat4 view;
 uniform float cameraFOV;
@@ -198,7 +199,7 @@ out vec4 fragColor;
 
 void main()
 {
-    vec4 hitColor = vec4(ambient, 1);
+    vec4 hitColor = vec4(screenColor, 1);
     vec4 rayDir = inverse(view) * vec4(normalize(vec3(screenPos.x * cameraFOV * aspectRatio, screenPos.y * cameraFOV, -1.f)), 1);
     float nearest = 999999999.f;
 
@@ -229,31 +230,28 @@ void main()
             {
                 nearest = hit.z;
 
-                // shadow ray
-                
-
                 // Get interpolated normal and tex coord
                 mat3 worldinvtr = mat3(inverse(transpose(world)));
                 vec3 n0 = worldinvtr * texelFetch(vertData, i0 * 3 + 1).xyz;
                 vec3 n1 = worldinvtr * texelFetch(vertData, i1 * 3 + 1).xyz;
                 vec3 n2 = worldinvtr * texelFetch(vertData, i2 * 3 + 1).xyz;
                                                
-                vec2 t0 = texelFetch(vertData, i0 * 3 + 2).xy;
-                vec2 t1 = texelFetch(vertData, i1 * 3 + 2).xy;
-                vec2 t2 = texelFetch(vertData, i2 * 3 + 2).xy;
+                vec3 t0 = texelFetch(vertData, i0 * 3 + 2).xyz;
+                //vec2 t1 = texelFetch(vertData, i1 * 3 + 2).xy;
+                //vec2 t2 = texelFetch(vertData, i2 * 3 + 2).xy;
 
                 vec3 worldPos = (1 - hit.x - hit.y) * p0w + hit.x * p1w + hit.y * p2w;
                 vec3 normal = normalize((1 - hit.x - hit.y) * n0 + hit.x * n1 + hit.y * n2);
-                vec2 texcoord = (1 - hit.x - hit.y) * t0 + hit.x * t1 + hit.y * t2;
+                //vec2 texcoord = (1 - hit.x - hit.y) * t0 + hit.x * t1 + hit.y * t2;
            
                 // Calculate lighting at the hit
-                vec3 placeholderColor = vec3(1, 1, 1);
-                float placeholderRough = 0.99f;
-                float placeholderMetal = 0.f;
+                vec3 baseColor = t0;
+                float placeholderRough = 0.4f;
+                float placeholderMetal = 0.75f;
 
                 vec3 viewVector = normalize(cameraPos - worldPos);
-                vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), placeholderColor, placeholderMetal);
-                vec3 totalLightColor = ambient * placeholderColor * (1 - placeholderMetal);
+                vec3 specularColor = mix(vec3(NONMETAL_F0), baseColor, vec3(placeholderMetal));
+                vec3 totalLightColor = ambient * baseColor * (1 - placeholderMetal);
                 
                 // Loop through the lights
                 for (uint i = 0u; i < MAX_LIGHT_COUNT; i++)
@@ -263,40 +261,71 @@ void main()
                     switch (lights[i].Type)
                     {
                         case LIGHT_TYPE_DIRECTIONAL:
-                            lightDir = normalize(lights[i].Direction);
+                            lightDir = lights[i].Direction;
                             break;
                         default:
-                            lightDir = normalize(worldPos - lights[i].Position);
+                            lightDir = worldPos - lights[i].Position;
                             attenuate = true;
                             break;
                     }
+
+                    // shadow ray for each light
+                    //I AM VIOLENTLY CRYING OVER THESE FOR LOOPS
+                    bool hit = false;
+                    float lightDist = length(lightDir);
+                    lightDir = normalize(lightDir);
+                    for (int i = 0; i < indexCount; i += 3)
+                    {
+                        vec4 p0 = texelFetch(vertData, texelFetch(indexData, i + 0).x * 3);
+                        mat4 world = mat4(
+                            texelFetch(worldData, int(p0.w) * 4 + 0), 
+                            texelFetch(worldData, int(p0.w) * 4 + 1), 
+                            texelFetch(worldData, int(p0.w) * 4 + 2), 
+                            texelFetch(worldData, int(p0.w) * 4 + 3)
+                            );
+                        vec3 p0w = vec3(world * vec4(p0.xyz, 1));
+                        vec3 p1w = vec3(world * vec4(texelFetch(vertData, texelFetch(indexData, i + 1).x * 3).xyz, 1));
+                        vec3 p2w = vec3(world * vec4(texelFetch(vertData, texelFetch(indexData, i + 2).x * 3).xyz, 1));
+
+                        // Raycast from camera position through this pixel to see if it hits this tri
+                        vec3 shadowHit;
+                        if (RaycastTri(worldPos, -lightDir, p0w, p1w, p2w, shadowHit))
+                        {
+                            if (shadowHit.z > EPSILON && shadowHit.z < lightDist)
+                            {
+                                hit = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!hit) // no hits detected, do the lighting thing
+                    {
+                        vec3 lightCol = ColorFromLightPBR( // Cook-Torrence
+                            normal, 
+                            lightDir, 
+                            lights[i].Color, 
+                            baseColor, 
+                            viewVector,
+                            placeholderRough, 
+                            placeholderMetal, 
+                            specularColor) * lights[i].Intensity; 
+//                        vec3 lightCol = ColorFromLight( // Phong
+//                            normal, 
+//                            lightDir, 
+//                            lights[i].Color, 
+//                            baseColor, 
+//                            viewVector, 
+//                            placeholderRough, 
+//                            1 - placeholderRough) * lights[i].Intensity; 
                     
-//                    vec3 lightCol = ColorFromLightPBR( // Cook-Torrence
-//                        normal, 
-//                        -lightDir, 
-//                        lights[i].Color, 
-//                        placeholderColor, 
-//                        viewVector, 
-//                        lights[i].Intensity, 
-//                        placeholderRough, 
-//                        placeholderMetal, 
-//                        specularColor); 
-                    vec3 lightCol = ColorFromLight( // Phong
-                        normal, 
-                        lightDir, 
-                        lights[i].Color, 
-                        placeholderColor, 
-                        viewVector, 
-                        placeholderRough, 
-                        1) * lights[0].Intensity; 
-                    
-                    // If this is a point or spot light, attenuate the color
-                    if (attenuate)
-                        lightCol *= Attenuate(lights[i], worldPos);
-        
-                    totalLightColor += lightCol;
-                }
-    
+                        // If this is a point or spot light, attenuate the color
+                        if (attenuate)
+                            lightCol *= Attenuate(lights[i], worldPos);
+
+                        totalLightColor += lightCol;
+                    }
+                } // end light loop
+
                 // correct color w/ gamma and return final color
                 hitColor = vec4(pow(totalLightColor.x, 1.0f / 2.2f),
                                 pow(totalLightColor.y, 1.0f / 2.2f),
@@ -304,6 +333,6 @@ void main()
                 break;
             }
         }
-    }
+    } // end original raycast
     fragColor = hitColor;
 }
