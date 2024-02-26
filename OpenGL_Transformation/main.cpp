@@ -42,7 +42,7 @@ Shader shader;
 void init()
 {
     oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
-    shader = Shader("../Shaders/vert2d.vert", "../Shaders/frag2d.frag");
+    shader = Shader("../ABCore/Shaders/vert2d.vert", "../ABCore/Shaders/frag2d.frag");
 
     // creating the rectangle to be reused for all drawing
     vector<unsigned int> indices = { 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 0, 3 };
