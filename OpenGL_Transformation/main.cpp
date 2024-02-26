@@ -1,3 +1,6 @@
+// link in my personal library
+#pragma comment(lib, "ABCore.lib")
+
 #include <GL/glew.h>
 
 // GLM math library
@@ -12,12 +15,9 @@
 #endif
 
 #include <iostream>
-#include "../GameObject.h"
+#include <ABCore/GameObject.h>
 
 #define PI 3.14159f
-
-// link in the utilities lib w/o needing to specify in the project properties
-//#pragma comment(lib, "utilities")
 
 using namespace std;
 using namespace AB;

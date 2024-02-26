@@ -1,3 +1,5 @@
+#pragma comment(lib, "ABCore.lib")
+
 #include <GL/glew.h>
 
 // GLM math library
@@ -15,8 +17,8 @@
 #endif
 
 #include <iostream>
-#include "../GameObject.h"
-#include "../Input.h"
+#include <ABCore/GameObject.h>
+#include <ABCore/Input.h>
 
 using namespace std;
 using namespace AB;
