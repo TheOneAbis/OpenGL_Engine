@@ -1,14 +1,26 @@
 #pragma once
 
-#include <GL/glew.h>
-
 #include <string>
-#include <fstream>
-#include <sstream>
-#include <iostream>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
+namespace glm
+{
+    enum precision;
+    namespace detail
+    {
+        template <typename T, precision P>
+        struct tvec2;
+        template <typename T, precision P>
+        struct tvec3;
+        template <typename T, precision P>
+        struct tvec4;
+        template <typename T, precision P>
+        struct tmat4x4;
+    }
+    typedef detail::tvec2<float, (precision)0> vec2;
+    typedef detail::tvec3<float, (precision)0> vec3;
+    typedef detail::tvec4<float, (precision)0> vec4;
+    typedef detail::tmat4x4<float, (precision)0> mat4x4;
+}
 
 namespace AB
 {

@@ -1,5 +1,13 @@
 #include "Shader.h"
 
+#include <GL/glew.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include <fstream>
+#include <sstream>
+#include <iostream>
+
 using namespace std;
 using namespace AB;
 

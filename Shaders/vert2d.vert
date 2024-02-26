@@ -10,5 +10,4 @@ uniform mat4 projection;
 void main()
 {
     gl_Position = projection * world * vec4(vPos, 1);
-    gl_PointSize = 2.f;
 }

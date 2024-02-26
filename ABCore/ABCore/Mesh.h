@@ -1,8 +1,9 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <string>
 #include <vector>
-#include <glm/glm.hpp>
 #include "Shader.h"
 
 namespace AB
@@ -33,7 +34,7 @@ namespace AB
 		Mesh() = default;
 		Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices, std::vector<Texture> textures);
 
-		void Draw(Shader& shader, int drawMode = GL_TRIANGLES);
+		void Draw(Shader& shader, int drawMode = 0x0004);
 
 	private:
 

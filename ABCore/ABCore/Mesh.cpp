@@ -1,5 +1,7 @@
 #include "Mesh.h"
 
+#include <GL/glew.h>
+
 using namespace std;
 using namespace AB;
 

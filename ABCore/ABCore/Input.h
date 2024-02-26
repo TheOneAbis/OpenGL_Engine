@@ -1,7 +1,17 @@
 #pragma once
 
 #include <unordered_map>
-#include <glm/glm.hpp>
+
+namespace glm
+{
+	enum precision;
+	namespace detail
+	{
+		template <typename T, precision P>
+		struct tvec2;
+	};
+	typedef detail::tvec2<float, (precision)0> vec2;
+}
 
 namespace AB
 {
@@ -49,7 +59,7 @@ namespace AB
 		std::unordered_map<int, bool> mousemap;
 		std::unordered_map<int, bool> prevmousemap;
 
-		glm::vec2 mousePos;
-		glm::vec2 prevMousePos;
+		glm::vec2* mousePos = nullptr;
+		glm::vec2* prevMousePos = nullptr;
 	};
 }

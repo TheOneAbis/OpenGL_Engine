@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Transform.h"
+#include <iostream>
 
 using namespace std;
 using namespace AB;

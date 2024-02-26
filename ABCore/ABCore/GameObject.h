@@ -5,6 +5,8 @@
 #include "Material.h"
 #include "Shader.h"
 
+#include <string>
+
 namespace AB
 {
 	class GameObject
@@ -21,7 +23,7 @@ namespace AB
 		GameObject(std::vector<Mesh> meshes, std::string name = "Game Object", Transform tm = Transform(), GameObject* parent = nullptr);
 		~GameObject();
 
-		void Draw(Shader& shader, int drawMode = GL_TRIANGLES);
+		void Draw(Shader& shader, int drawMode = 0x0004);
 
 		Transform GetWorldTM();
 		Transform GetLocalTM();

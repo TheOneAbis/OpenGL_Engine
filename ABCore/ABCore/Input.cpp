@@ -1,5 +1,7 @@
 #include "Input.h"
 
+#include <glm/glm.hpp>
+
 #ifdef __APPLE__
 #include <GLUT/glut.h> // include glut for Mac
 #else
@@ -46,15 +48,15 @@ std::unordered_map<int, bool>& Input::GetMouseMap()
 }
 glm::vec2& Input::GetMousePos()
 {
-	return mousePos;
+	return *mousePos;
 }
 glm::vec2& Input::GetLastMousePos()
 {
-	return prevMousePos;
+	return *prevMousePos;
 }
 glm::vec2 Input::GetMouseDelta()
 {
-	return mousePos - prevMousePos;
+	return *mousePos - *prevMousePos;
 }
 
 void ProcessKeyInput(unsigned char key, int xMouse, int yMouse)
@@ -76,6 +78,9 @@ void ProcessMouseMotion(int x, int y)
 
 void Input::Init()
 {
+	mousePos = new glm::vec2();
+	prevMousePos = new glm::vec2();
+
 	glutKeyboardFunc(ProcessKeyInput);
 	glutKeyboardUpFunc(ProcessKeyUpInput);
 	glutMouseFunc(ProcessMouseInput);
@@ -86,7 +91,11 @@ void Input::Update()
 {
 	prevkeymap = keymap;
 	prevmousemap = mousemap;
-	prevMousePos = mousePos;
+	*prevMousePos = *mousePos;
 }
 
-Input::~Input() {}
+Input::~Input() 
+{
+	delete mousePos;
+	delete prevMousePos;
+}

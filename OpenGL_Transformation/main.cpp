@@ -14,8 +14,8 @@
 #include <GL/freeglut.h> //include glut for Windows
 #endif
 
-#include <iostream>
 #include <ABCore/GameObject.h>
+#include <ABCore/Input.h>
 
 #define PI 3.14159f
 
@@ -35,44 +35,121 @@ struct GameObjectSelection
 vector<GameObjectSelection> gameObjects;
 GameObject* selected = nullptr;
 int treeDepth = 0;
+float oldT = 0;
 
 Shader shader;
 
 void init()
 {
+    oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
     shader = Shader("../Shaders/vert2d.vert", "../Shaders/frag2d.frag");
 
     // creating the rectangle to be reused for all drawing
-    Mesh rect(
+    vector<unsigned int> indices = { 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 0, 3 };
+    Mesh torsoMesh(
         {
-            { glm::vec3(-0.25f, 0.f, 0.f), glm::vec3(), glm::vec2() },
-            { glm::vec3(-0.25f, 0.5f, 0.f), glm::vec3(), glm::vec2() },
-            { glm::vec3(0.25f, 0.5f, 0.f), glm::vec3(), glm::vec2() },
-            { glm::vec3(0.25f, 0.f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.35f, 0.f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.35f, 0.5f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.35f, 0.5f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.35f, 0.f, 0.f), glm::vec3(), glm::vec2() }
         },
-        { 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 0, 3 }, vector<Texture>());
+        indices, vector<Texture>());
+    Mesh chestMesh(
+        {
+            { glm::vec3(-0.5f, 0.f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.5f, 0.5f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.5f, 0.5f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.5f, 0.f, 0.f), glm::vec3(), glm::vec2() }
+        },
+        indices, vector<Texture>());
+    Mesh neckMesh(
+        {
+            { glm::vec3(-0.1f, 0.f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.1f, 0.25f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.1f, 0.25f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.1f, 0.f, 0.f), glm::vec3(), glm::vec2() }
+        },
+        indices, vector<Texture>());
+    Mesh limbMesh(
+        {
+            { glm::vec3(-0.15f, 0.f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.15f, 0.4f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.15f, 0.4f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.15f, 0.f, 0.f), glm::vec3(), glm::vec2() }
+        },
+        indices, vector<Texture>());
+    Mesh handMesh(
+        {
+            { glm::vec3(-0.15f, 0.f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.25f, 0.3f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.25f, 0.3f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.15f, 0.f, 0.f), glm::vec3(), glm::vec2() }
+        },
+        indices, vector<Texture>());
+    Mesh headMesh(
+        {
+            { glm::vec3(-0.15f, 0.f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.25f, 0.2f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(-0.15f, 0.3f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.15f, 0.3f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.25f, 0.2f, 0.f), glm::vec3(), glm::vec2() },
+            { glm::vec3(0.15f, 0.f, 0.f), glm::vec3(), glm::vec2() }
+        },
+        { 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 0, 5 }, vector<Texture>());
 
     // creating all the body parts
     gameObjects.reserve(16); // pre-allocate, we don't want shit being moved around in memory while adding stuff
 
-    gameObjects.push_back({ GameObject({ rect }, "Torso", Transform({ 0.f, 0.f, 0.f }, glm::quat(), {1, 1, 1}))}); // 0
-    gameObjects.push_back({ GameObject({ rect }, "Chest", Transform({ 0.f, 0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[0].gameObject) }); // 1 
-    gameObjects.push_back({ GameObject({ rect }, "Left Thigh", Transform({ -0.5f, -0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[0].gameObject) }); // 2
-    gameObjects.push_back({ GameObject({ rect }, "Right Thigh", Transform({ 0.5f, -0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[0].gameObject) }); // 3
-    gameObjects.push_back({ GameObject({ rect }, "Neck", Transform({ 0.f, 0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[1].gameObject) }); // 4
-    gameObjects.push_back({ GameObject({ rect }, "Left Shoulder", Transform({ -0.5f, 0.f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[1].gameObject) }); // 5
-    gameObjects.push_back({ GameObject({ rect }, "Right Shoulder", Transform({ 0.5f, 0.f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[1].gameObject) }); // 6
-    gameObjects.push_back({ GameObject({ rect }, "Left Leg", Transform({ 0.f, -0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[2].gameObject) }); // 7
-    gameObjects.push_back({ GameObject({ rect }, "Right Leg", Transform({ 0.f, -0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[3].gameObject) }); // 8
-    gameObjects.push_back({ GameObject({ rect }, "Head", Transform({ 0.f, 0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[4].gameObject) }); // 9
-    gameObjects.push_back({ GameObject({ rect }, "Left Forearm", Transform({ -0.5f, 0.f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[5].gameObject) }); // 10
-    gameObjects.push_back({ GameObject({ rect }, "Right Forearm", Transform({ 0.5f, 0.f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[6].gameObject) }); // 11
-    gameObjects.push_back({ GameObject({ rect }, "Left Foot", Transform({ 0.f, -0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[7].gameObject) }); // 12
-    gameObjects.push_back({ GameObject({ rect }, "Right Foot", Transform({ 0.f, -0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[8].gameObject) }); // 13
-    gameObjects.push_back({ GameObject({ rect }, "Left Hand", Transform({ -0.5f, 0.f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[10].gameObject) }); // 14
-    gameObjects.push_back({ GameObject({ rect }, "Right Hand", Transform({ 0.5f, 0.f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[11].gameObject) }); // 15
+    gameObjects.push_back({ GameObject({ torsoMesh }, "Torso", Transform({ 0.f, 0.f, 0.f }, glm::quat(), {1, 1, 1}))}); // 0
+    gameObjects.push_back({ GameObject({ chestMesh }, "Chest", Transform({ 0.f, 0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[0].gameObject) }); // 1 
+    gameObjects.push_back({ GameObject({ limbMesh }, "Left Thigh", Transform({ -0.25f, 0.f, 0.f }, glm::quat({0 ,0, PI}), {1, 1, 1}), &gameObjects[0].gameObject) }); // 2
+    gameObjects.push_back({ GameObject({ limbMesh }, "Right Thigh", Transform({ 0.25f, 0.f, 0.f }, glm::quat({0, 0, PI}), {1, 1, 1}), &gameObjects[0].gameObject) }); // 3
+    gameObjects.push_back({ GameObject({ neckMesh }, "Neck", Transform({ 0.f, 0.5f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[1].gameObject) }); // 4
+    gameObjects.push_back({ GameObject({ limbMesh }, "Left Shoulder", Transform({ -0.5f, 0.25f, 0.f }, glm::quat({0, 0, PI / 2.f}), {1, 1, 1}), &gameObjects[1].gameObject) }); // 5
+    gameObjects.push_back({ GameObject({ limbMesh }, "Right Shoulder", Transform({ 0.5f, 0.25f, 0.f }, glm::quat({0, 0, -PI / 2.f}), {1, 1, 1}), &gameObjects[1].gameObject) }); // 6
+    gameObjects.push_back({ GameObject({ limbMesh }, "Left Leg", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[2].gameObject) }); // 7
+    gameObjects.push_back({ GameObject({ limbMesh }, "Right Leg", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[3].gameObject) }); // 8
+    gameObjects.push_back({ GameObject({ headMesh }, "Head", Transform({ 0.f, 0.25f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[4].gameObject) }); // 9
+    gameObjects.push_back({ GameObject({ limbMesh }, "Left Forearm", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[5].gameObject) }); // 10
+    gameObjects.push_back({ GameObject({ limbMesh }, "Right Forearm", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[6].gameObject) }); // 11
+    gameObjects.push_back({ GameObject({ handMesh }, "Left Foot", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[7].gameObject) }); // 12
+    gameObjects.push_back({ GameObject({ handMesh }, "Right Foot", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[8].gameObject) }); // 13
+    gameObjects.push_back({ GameObject({ handMesh }, "Left Hand", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[10].gameObject) }); // 14
+    gameObjects.push_back({ GameObject({ handMesh }, "Right Hand", Transform({ 0.f, 0.4f, 0.f }, glm::quat(), {1, 1, 1}), &gameObjects[11].gameObject) }); // 15
 
     selected = &gameObjects[0].gameObject;
+}
+
+void tick()
+{
+    float newT = (glutGet(GLUT_ELAPSED_TIME) / 1000.f);
+    float dt = newT - oldT;
+    oldT = newT;
+
+    //! A/D - cycle children
+    Transform tm = selected->GetLocalTM();
+    glm::vec3 eulers = glm::eulerAngles(tm.GetRotation());
+
+    Input& input = Input::Get();
+    if (input.KeyDown('a'))
+    {
+        eulers.z += (PI / 3.f) * dt;
+        tm.SetRotationEulersXYZ(eulers);
+        selected->SetLocalTM(tm);
+    }
+    else if (input.KeyDown('d'))
+    {
+        eulers.z -= (PI / 3.f) * dt;
+        tm.SetRotationEulersXYZ(eulers);
+        selected->SetLocalTM(tm);
+    }
+    else if (input.KeyPressed(27))
+    {
+        exit(0);
+    }
+
+    Input::Get().Update();
+    glutPostRedisplay();
 }
 
 // called when the GL context need to be rendered
@@ -105,42 +182,9 @@ void display(void)
 // called when window is first created or when window is resized
 void reshape(int w, int h)
 {
-    // update thescreen dimensions
+    // update screen dimensions
     windowSize = glm::vec2(w, h);
-
-    /* tell OpenGL to use the whole window for drawing */
     glViewport(0, 0, (GLsizei)w, (GLsizei)h);
-
-    glutPostRedisplay();
-}
-
-//! A/D - cycle children
-void processKeyInput(unsigned char key, int xMouse, int yMouse)
-{
-    Transform tm = selected->GetLocalTM();
-    glm::vec3 eulers = glm::eulerAngles(tm.GetRotation());
-
-    switch (key)
-    {
-    case 'a':
-    {
-        eulers.z += PI / 12.f;
-        tm.SetRotationEulersXYZ(eulers);
-        selected->SetLocalTM(tm);
-    }
-        break;
-    case 'd':
-    {
-        eulers.z -= PI / 12.f;
-        tm.SetRotationEulersXYZ(eulers);
-        selected->SetLocalTM(tm);
-    }
-        break;
-    case 27: // exit the program
-        exit(0);
-        break;
-    }
-
     glutPostRedisplay();
 }
 
@@ -169,7 +213,7 @@ void processSpecialInput(int key, int x, int y)
             selected = selected->GetChild(reinterpret_cast<GameObjectSelection*>(selected)->selectedChild);
         }
         break;
-    case GLUT_KEY_LEFT:
+    case GLUT_KEY_RIGHT:
         if (parentSelection)
         {
             GameObject* parent = selected->GetParent();
@@ -186,7 +230,7 @@ void processSpecialInput(int key, int x, int y)
             }
         }
         break;
-    case GLUT_KEY_RIGHT:
+    case GLUT_KEY_LEFT:
         if (parentSelection)
         {
             GameObject* parent = selected->GetParent();
@@ -235,9 +279,10 @@ int main(int argc, char* argv[])
     glutReshapeFunc(reshape);
 
     glutDisplayFunc(display);
+    glutIdleFunc(tick);
 
     // Processing input
-    glutKeyboardFunc(processKeyInput);
+    Input::Get().Init();
     glutSpecialFunc(processSpecialInput);
 
     init();
