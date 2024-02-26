@@ -21,3 +21,5 @@ Extra note: Line widths are set at 1 px since I'm not using immediate mode, but 
 
 Shaders that account for line width are a bit more difficult to do than I originally thought 
 (I'd likely either need geometry shaders, which I don't know how to use yet, or fatten the lines in a postprocess pass), thus I left them at 1.
+
+One final note: ABCore.lib only works in Debug config, so make sure you're not in Release mode when running main.cpp.

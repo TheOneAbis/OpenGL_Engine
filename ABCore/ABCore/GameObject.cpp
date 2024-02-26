@@ -1,8 +1,8 @@
 #include "GameObject.h"
 
-#include <assimp/scene.h>
-#include <assimp/Importer.hpp>
-#include <assimp/postprocess.h>
+//#include <assimp/scene.h>
+//#include <assimp/Importer.hpp>
+//#include <assimp/postprocess.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -19,100 +19,100 @@ using namespace AB;
 // 
 //////////////////////////////////////////////////////////////////////
 
-static Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene, const string directory)
-{
-	vector<Vertex> vertices;
-	vector<unsigned int> indices;
-	vector<Texture> textures;
-
-	// process vertices
-	for (unsigned int i = 0; i < mesh->mNumVertices; i++)
-	{
-		Vertex vertex;
-
-		// process vertex positions, normals and texture coords
-		glm::vec3 vec;
-		vec.x = mesh->mVertices[i].x;
-		vec.y = mesh->mVertices[i].y;
-		vec.z = mesh->mVertices[i].z;
-		vertex.Position = vec;
-
-		vec.x = mesh->mNormals[i].x;
-		vec.y = mesh->mNormals[i].y;
-		vec.z = mesh->mNormals[i].z;
-		vertex.Normal = vec;
-
-		if (mesh->mTextureCoords[0]) // does the mesh contain texture coords?
-		{
-			glm::vec2 texVec;
-			texVec.x = mesh->mTextureCoords[0][i].x;
-			texVec.y = mesh->mTextureCoords[0][i].y;
-			vertex.TexCoord = texVec;
-		}
-		else
-		{
-			vertex.TexCoord = glm::vec2(0.f, 0.f);
-		}
-		vertices.push_back(vertex);
-	}
-
-	// process indices
-	for (unsigned int i = 0; i < mesh->mNumFaces; i++)
-	{
-		aiFace face = mesh->mFaces[i];
-		for (unsigned int j = 0; j < face.mNumIndices; j++)
-		{
-			indices.push_back(face.mIndices[j]);
-		}
-	}
-
-	//// process material
-	//if (mesh->mMaterialIndex >= 0)
-	//{
-	//	aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-
-	//	// load diffuse maps
-	//	vector<Texture> diffuseMaps = LoadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
-	//	textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
-	//	
-	//	// load specular maps
-	//	vector<Texture> specularMaps = LoadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular");
-	//	textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
-	//}
-
-	return Mesh(vertices, indices, textures);
-}
-
-static void ProcessNode(vector<Mesh>& meshes, aiNode* node, const aiScene* scene, const string directory)
-{
-	// process all the node's meshes (if any)
-	for (unsigned int i = 0; i < node->mNumMeshes; i++)
-	{
-		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		meshes.push_back(ProcessMesh(mesh, scene, directory));
-	}
-	// then do the same for each of its children
-	for (unsigned int i = 0; i < node->mNumChildren; i++)
-	{
-		ProcessNode(meshes, node->mChildren[i], scene, directory);
-	}
-}
+//static Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene, const string directory)
+//{
+//	vector<Vertex> vertices;
+//	vector<unsigned int> indices;
+//	vector<Texture> textures;
+//
+//	// process vertices
+//	for (unsigned int i = 0; i < mesh->mNumVertices; i++)
+//	{
+//		Vertex vertex;
+//
+//		// process vertex positions, normals and texture coords
+//		glm::vec3 vec;
+//		vec.x = mesh->mVertices[i].x;
+//		vec.y = mesh->mVertices[i].y;
+//		vec.z = mesh->mVertices[i].z;
+//		vertex.Position = vec;
+//
+//		vec.x = mesh->mNormals[i].x;
+//		vec.y = mesh->mNormals[i].y;
+//		vec.z = mesh->mNormals[i].z;
+//		vertex.Normal = vec;
+//
+//		if (mesh->mTextureCoords[0]) // does the mesh contain texture coords?
+//		{
+//			glm::vec2 texVec;
+//			texVec.x = mesh->mTextureCoords[0][i].x;
+//			texVec.y = mesh->mTextureCoords[0][i].y;
+//			vertex.TexCoord = texVec;
+//		}
+//		else
+//		{
+//			vertex.TexCoord = glm::vec2(0.f, 0.f);
+//		}
+//		vertices.push_back(vertex);
+//	}
+//
+//	// process indices
+//	for (unsigned int i = 0; i < mesh->mNumFaces; i++)
+//	{
+//		aiFace face = mesh->mFaces[i];
+//		for (unsigned int j = 0; j < face.mNumIndices; j++)
+//		{
+//			indices.push_back(face.mIndices[j]);
+//		}
+//	}
+//
+//	//// process material
+//	//if (mesh->mMaterialIndex >= 0)
+//	//{
+//	//	aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+//
+//	//	// load diffuse maps
+//	//	vector<Texture> diffuseMaps = LoadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
+//	//	textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
+//	//	
+//	//	// load specular maps
+//	//	vector<Texture> specularMaps = LoadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular");
+//	//	textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+//	//}
+//
+//	return Mesh(vertices, indices, textures);
+//}
+//
+//static void ProcessNode(vector<Mesh>& meshes, aiNode* node, const aiScene* scene, const string directory)
+//{
+//	// process all the node's meshes (if any)
+//	for (unsigned int i = 0; i < node->mNumMeshes; i++)
+//	{
+//		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+//		meshes.push_back(ProcessMesh(mesh, scene, directory));
+//	}
+//	// then do the same for each of its children
+//	for (unsigned int i = 0; i < node->mNumChildren; i++)
+//	{
+//		ProcessNode(meshes, node->mChildren[i], scene, directory);
+//	}
+//}
 
 static vector<Mesh> LoadModelMeshes(string path)
 {
 	vector<Mesh> meshes;
-	Assimp::Importer import;
-	// if model doesn't entirely consist of tri's, transform them to tri's first
-	const aiScene * scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+	//Assimp::Importer import;
+	//// if model doesn't entirely consist of tri's, transform them to tri's first
+	//const aiScene * scene = import.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
 
-	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
-	{
-		cout << "ASSIMP ERROR: " << import.GetErrorString() << endl;
-		return meshes;
-	}
+	//if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+	//{
+	//	cout << "ASSIMP ERROR: " << import.GetErrorString() << endl;
+	//	return meshes;
+	//}
 
-	// Process all nodes and add them as child game objects
-	ProcessNode(meshes, scene->mRootNode, scene, path.substr(0, path.find_last_of('/')));
+	//// Process all nodes and add them as child game objects
+	//ProcessNode(meshes, scene->mRootNode, scene, path.substr(0, path.find_last_of('/')));
 	return meshes;
 }
 
