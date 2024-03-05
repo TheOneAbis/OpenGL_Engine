@@ -197,6 +197,7 @@ void GameObject::Draw(Shader& shader, int drawMode)
 	shader.SetVector3("albedoColor", material.albedo);
 	shader.SetFloat("metallic", material.metallic);
 	shader.SetFloat("roughness", material.roughness);
+	shader.SetFloat("emissive", material.emissive);
 
 	// draw all meshes on this object
 	for (Mesh& mesh : meshes)

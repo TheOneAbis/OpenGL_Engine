@@ -104,6 +104,10 @@ void init()
     gameObjects.back().SetWorldTM(Transform({ 2, -1, -1 }, glm::quat({ 0, 0, glm::pi<float>() / 2.f }), { 3, 1, 3 }));
     gameObjects.back().GetMaterial().albedo = { 1, 0, 0 };
 
+    gameObjects.push_back(GameObject(plane, "LightPlane"));
+    gameObjects.back().SetWorldTM(Transform({ 0.75, 1.95, -2.25 }, glm::quat({ 0, 0, glm::pi<float>() }), { 0.5, 0.5, 0.5 }));
+    gameObjects.back().GetMaterial().emissive = 1;
+
     // set up lights
     Light point = {};
     point.Type = LIGHT_TYPE_POINT;

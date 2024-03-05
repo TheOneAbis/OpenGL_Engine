@@ -10,6 +10,7 @@ namespace AB
 		glm::vec3 albedo = {1, 1, 1};
 		float roughness = 1.f;
 		float metallic = 0.f;
+		float emissive = 0.f;
 
 		Material() = default;
 

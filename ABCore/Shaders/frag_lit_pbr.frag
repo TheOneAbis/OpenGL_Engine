@@ -180,6 +180,7 @@ in vec2 texCoord;
 uniform vec3 albedoColor;
 uniform float roughness;
 uniform float metallic;
+uniform float emissive;
 uniform vec3 ambient;
 
 uniform vec3 cameraPosition;
@@ -195,6 +196,7 @@ void main()
     vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), albedoColor.rgb, metallic);
 
     vec3 totalLightColor = ambient * albedoColor * (1 - metallic);
+    totalLightColor += emissive.xxx;
 
     // Loop through the lights
     for (uint i = 0u; i < MAX_LIGHT_COUNT; i++)
@@ -225,7 +227,6 @@ void main()
     }
     
     // correct color w/ gamma and return final color
-    
     fragColor = vec4(pow(totalLightColor.x, 1.0f / 2.2f),
                      pow(totalLightColor.y, 1.0f / 2.2f),
                      pow(totalLightColor.z, 1.0f / 2.2f), 1);
