@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGL_Transformation", "Op
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ABCore", "ABCore\ABCore.vcxproj", "{BC335C54-CAEE-4951-B5D6-5913C1F9881E}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Radiosity", "Radiosity\Radiosity.vcxproj", "{8398BD2D-7741-40D1-B1B9-CB78A4569472}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{BC335C54-CAEE-4951-B5D6-5913C1F9881E}.Release|x64.Build.0 = Release|x64
 		{BC335C54-CAEE-4951-B5D6-5913C1F9881E}.Release|x86.ActiveCfg = Release|Win32
 		{BC335C54-CAEE-4951-B5D6-5913C1F9881E}.Release|x86.Build.0 = Release|Win32
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Debug|x64.ActiveCfg = Debug|x64
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Debug|x64.Build.0 = Debug|x64
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Debug|x86.ActiveCfg = Debug|Win32
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Debug|x86.Build.0 = Debug|Win32
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Release|x64.ActiveCfg = Release|x64
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Release|x64.Build.0 = Release|x64
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Release|x86.ActiveCfg = Release|Win32
+		{8398BD2D-7741-40D1-B1B9-CB78A4569472}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

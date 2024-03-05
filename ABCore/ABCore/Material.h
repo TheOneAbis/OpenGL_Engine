@@ -7,8 +7,8 @@ namespace AB
 	class Material
 	{
 	public:
-		glm::vec3 albedo;
-		float specular = 0.f;
+		glm::vec3 albedo = {1, 1, 1};
+		float roughness = 1.f;
 		float metallic = 0.f;
 
 		Material() = default;

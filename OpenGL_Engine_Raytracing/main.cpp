@@ -66,7 +66,7 @@ void init()
     oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
 
     // set up shader
-    shader = Shader("../Shaders/vert_screen.vert", "../Shaders/frag_raytracing.frag");
+    shader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_raytracing.frag");
     tri = Mesh(
         {
             { glm::vec3(-1, 1, 0), glm::vec3(), glm::vec2() },

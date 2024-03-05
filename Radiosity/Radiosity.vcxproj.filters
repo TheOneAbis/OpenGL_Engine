@@ -20,10 +20,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\ABCore\Shaders\frag_raytracing.frag">
+    <None Include="..\ABCore\Shaders\frag_lit_pbr.frag">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="..\ABCore\Shaders\vert_screen.vert">
+    <None Include="..\ABCore\Shaders\vertex.vert">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
