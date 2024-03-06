@@ -23,6 +23,7 @@ mono_crash.*
 [Rr]eleases/
 x64/
 !ABCore/x64
+!Libs/lib/x64
 x86/
 [Ww][Ii][Nn]32/
 [Aa][Rr][Mm]/
