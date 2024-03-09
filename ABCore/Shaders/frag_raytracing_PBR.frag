@@ -15,7 +15,7 @@ struct Light
     vec3 Position;     // Point and Spot lights have a position in space
     float Intensity;   // All lights need an intensity
     vec3 Color;        // All lights need a color
-    float SpotFalloff; // Spot lights need a value to define their “cone” size
+    float SpotFalloff; // Spot lights need a value to define their ï¿½coneï¿½ size
 };
 
 // Basic lighting functions
@@ -24,35 +24,95 @@ float DiffuseBRDF(vec3 normal, vec3 dirToLight)
     return clamp(dot(normal, dirToLight), 0, 1);
 }
 
-float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness, float roughScale)
-{
-	// Get reflection of light bouncing off the surface 
-    vec3 refl = reflect(lightDir, normal);
-    
-    float specExponent = (1.0f - roughness) * MAX_SPECULAR_EXPONENT;
-
-	// Compare reflection against view vector, raising it to
-	// a very high power to ensure the falloff to zero is quick
-    return pow(clamp(dot(refl, viewVector), 0, 1), specExponent) * roughScale;
-}
-
-vec3 ColorFromLight(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness, float roughnessScale)
-{
-    // Calculate diffuse and specular values
-    float diffuse = DiffuseBRDF(normal, -lightDir);
-    float spec = SpecularBRDF(normal, lightDir, viewVec, roughness, roughnessScale);
-
-    // Cut the specular if the diffuse contribution is zero
-    spec *= diffuse == 0.f ? 0.f : 1.f;
-
-    return lightColor * colorTint * diffuse + spec;
-}
-
 float Attenuate(Light light, vec3 worldPos)
 {
     float dist = distance(light.Position, worldPos);
     float att = clamp(1.0f - (dist * dist / (light.Range * light.Range)), 0.f, 1.f);
     return att * att;
+}
+
+// -------------------------------------------------------- \\
+// -- PHYSICALLY-BASED RENDERING FUNCTIONS AND CONSTANTS (Cook-Torrence) -- \\
+// -------------------------------------------------------- \\
+
+// The fresnel value for non-metals (dielectrics)
+const float NONMETAL_F0 = 0.04f;
+const float MIN_ROUGHNESS = 0.0000001f;
+const float PI = 3.14159265359f;
+
+// Calculates diffuse amount based on energy conservation
+vec3 DiffuseEnergyConserve(float diffuse, vec3 F, float metalness)
+{
+    return diffuse * (1 - F) * (1 - metalness);
+}
+
+// Normal Distribution Function: GGX (Trowbridge-Reitz)
+float D_GGX(vec3 n, vec3 h, float roughness)
+{
+    float NdotH = clamp(dot(n, h), 0.f, 1.f);
+    float NdotH2 = NdotH * NdotH;
+    float a = roughness * roughness;
+    float a2 = max(a * a, MIN_ROUGHNESS);
+
+	// ((n dot h)^2 * (a^2 - 1) + 1)
+    float denomToSquare = NdotH2 * (a2 - 1) + 1;
+
+	// Final value
+    return a2 / (PI * denomToSquare * denomToSquare);
+}
+
+// Fresnel term - Schlick approx.
+vec3 F_Schlick(vec3 v, vec3 h, vec3 f0)
+{
+    float VdotH = clamp(dot(v, h), 0.f, 1.f);
+    return f0 + (1 - f0) * pow(1 - VdotH, 5);
+}
+
+// Geometric Shadowing - Schlick-GGX
+float G_SchlickGGX(vec3 n, vec3 v, float roughness)
+{
+	// remapping
+    float k = pow(roughness + 1, 2) / 8.0f;
+    float NdotV = clamp(dot(n, v), 0.f, 1.f);
+
+	// Final value
+    return 1 / (NdotV * (1 - k) + k);
+}
+
+// Cook-Torrance Microfacet BRDF (Specular)
+vec3 MicrofacetBRDF(vec3 n, vec3 l, vec3 v, float roughness, vec3 f0, out vec3 F_out)
+{
+    vec3 h = normalize(v + l);
+
+	// Run numerator functions
+    float D = D_GGX(n, h, roughness);
+    vec3 F = F_Schlick(v, h, f0);
+    float G = G_SchlickGGX(n, v, roughness) * G_SchlickGGX(n, l, roughness);
+	
+    F_out = F;
+
+	// Final specular formula
+    vec3 specularResult = (D * F * G) / 4;
+
+	// According to the rendering equation,
+	// specular must have the same NdotL applied as diffuse
+    return specularResult * max(dot(n, l), 0);
+}
+
+vec3 ColorFromLightPBR(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor,
+    vec3 viewVec, float roughness, float metalness, vec3 specColor)
+{
+    float diffuse = DiffuseBRDF(normal, -lightDir);
+    
+    vec3 fresnel;
+    // Get specular color and fresnel result
+    vec3 spec = MicrofacetBRDF(normal, -lightDir, viewVec, roughness, specColor, fresnel);
+    
+    // Calculate diffuse with energy conservation, including cutting diffuse for metals
+    vec3 balancedDiff = DiffuseEnergyConserve(diffuse, fresnel, metalness);
+    
+    // Combine the final diffuse and specular values for this light
+    return (balancedDiff * surfaceColor + spec) * lightColor;
 }
 
 #define EPSILON 0.0001f
@@ -166,6 +226,7 @@ void main()
                 float placeholderMetal = 0.75f;
 
                 vec3 viewVector = normalize(cameraPos - worldPos);
+                vec3 specularColor = mix(vec3(NONMETAL_F0), baseColor, vec3(placeholderMetal));
                 vec3 totalLightColor = ambient * baseColor * (1 - placeholderMetal);
                 
                 // Loop through the lights
@@ -215,14 +276,15 @@ void main()
                     }
                     if (!hit) // no hits detected, do the lighting thing
                     {
-                        vec3 lightCol = ColorFromLight( // Phong
+                        vec3 lightCol = ColorFromLightPBR( // Cook-Torrence
                             normal, 
                             lightDir, 
                             lights[i].Color, 
                             baseColor, 
-                            viewVector, 
+                            viewVector,
                             placeholderRough, 
-                            1 - placeholderRough) * lights[i].Intensity; 
+                            placeholderMetal, 
+                            specularColor) * lights[i].Intensity;
                     
                         // If this is a point or spot light, attenuate the color
                         if (attenuate)

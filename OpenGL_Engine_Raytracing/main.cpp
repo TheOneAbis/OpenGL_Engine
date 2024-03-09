@@ -76,21 +76,15 @@ void init()
         {0, 1, 2}, {});
 
     // set up scene models
-    smallSphere = GameObject("Assets/sphere.fbx");
+    smallSphere = GameObject("../Assets/sphere.fbx");
     smallSphere.SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
     smallSphere.GetMaterial().albedo = { 0.3f, 0.3f, 0.1f };
 
-    bigSphere = GameObject("Assets/sphere.fbx");
+    bigSphere = GameObject("../Assets/sphere.fbx");
     bigSphere.SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
     auto* mat = &bigSphere.GetMaterial();
     mat->albedo = { 0.5f, 0.1f, 0.5f };
     mat->metallic = 0.5f;
-   
-    cone = GameObject("Assets/cone.obj");
-    cone.SetWorldTM({ 2.f, 0.5f, -2.f }, glm::quat(), {1.f, 1.f, 1.f});
-    mat = &cone.GetMaterial();
-    mat->albedo = { 0.8f, 0.3f, 0.1f };
-    mat->specular = 0.2f;
     
     mFloor = GameObject({ Mesh(
         {
@@ -106,15 +100,7 @@ void init()
 
     gameObjects = { bigSphere, smallSphere, cone, mFloor };
 
-    // set up lights
-    Light point = {};
-    point.Type = LIGHT_TYPE_POINT;
-    point.Color = glm::vec3(1.f, 0.f, 0.f);
-    point.Intensity = 1.f;
-    point.Position = glm::vec3(-0.65, 0.25, -0.65);
-    point.Range = 5.f;
-    //lights.push_back(point);
-
+    // set up light
     Light dirLight = {};
     dirLight.Type = LIGHT_TYPE_DIRECTIONAL;
     dirLight.Direction = glm::normalize(glm::vec3(-0.3f, -1.f, -0.5f));
