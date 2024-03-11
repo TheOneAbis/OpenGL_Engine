@@ -161,7 +161,20 @@ void main()
                 //vec2 texcoord = (1 - hit.x - hit.y) * t0 + hit.x * t1 + hit.y * t2;
            
                 // Calculate lighting at the hit
-                vec3 baseColor = t0;
+                vec3 baseColor = vec3(1, 1, 0);
+                if (int(p0.w) == 3)
+                {
+                    ivec2 scaledPos = abs(ivec3(worldPos * 4) % 2).xz;
+                    if (scaledPos == ivec2(0, 0) || scaledPos == ivec2(1, 1))
+                        baseColor.y = 0;
+                        if (worldPos.x < 0)
+                            baseColor.y = 1 - baseColor.y;
+                }
+                else
+                {
+                    baseColor = t0;
+                }
+
                 float placeholderRough = 0.4f;
                 float placeholderMetal = 0.75f;
 
