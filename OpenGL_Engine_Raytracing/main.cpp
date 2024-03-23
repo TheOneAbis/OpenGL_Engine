@@ -79,6 +79,7 @@ void init()
     smallSphere = GameObject("../Assets/sphere.fbx");
     smallSphere.SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
     smallSphere.GetMaterial().albedo = { 0.3f, 0.3f, 0.1f };
+    smallSphere.GetMaterial().roughness = 0.f;
 
     bigSphere = GameObject("../Assets/sphere.fbx");
     bigSphere.SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
@@ -105,7 +106,7 @@ void init()
     dirLight.Type = LIGHT_TYPE_DIRECTIONAL;
     dirLight.Direction = glm::normalize(glm::vec3(-0.3f, -1.f, -0.5f));
     dirLight.Color = glm::vec3(1.f, 1.f, 1.f);
-    dirLight.Intensity = 0.5f;
+    dirLight.Intensity = 1.f;
     lights.push_back(dirLight);
 
     // create the giant vertex buffer
@@ -128,7 +129,7 @@ void init()
                 // store which world matrix this vert should use in the position's w coord
                 vertData.push_back(glm::vec4(vert.Position, (float)worldMatData.size() - 1.f));
                 vertData.push_back(glm::vec4(vert.Normal, 1));
-                vertData.push_back(glm::vec4(obj.GetMaterial().albedo, 1)); // change this later, currently just storing albedo shit
+                vertData.push_back(glm::vec4(obj.GetMaterial().albedo, obj.GetMaterial().roughness)); // change this later, currently just storing albedo shit
             }
         }
     }
@@ -218,7 +219,8 @@ void display(void)
     shader.SetVector3("cameraPos", camTM.GetTranslation());
     shader.SetInt("indexCount", indexCount);
     shader.SetVector3("ambient", glm::vec3(0.1f, 0.1f, 0.1f));
-    shader.SetVector3("screenColor", glm::vec3(0.3f, 0.8f, 0.8f));
+    shader.SetVector3("screenColor", glm::vec3(0.25f, 0.61f, 1.f));
+    shader.SetInt("bounces", 2);
     
     // Lighting uniform data
     for (unsigned int i = 0; i < lights.size(); i++)
