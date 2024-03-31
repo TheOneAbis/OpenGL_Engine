@@ -60,6 +60,7 @@ const char meshFile[128] =
 
 Mesh g_mesh[2] {};
 vector<Light> pointLights;
+bool index = false;
 
 float g_time = 0.0f;
 
@@ -69,22 +70,24 @@ void initialization()
 
 	// Create teapots
 	g_mesh[0].create(meshFile, v_shader_file, f_shader_file, { 0, 2, 0 }, { 0.5f, 0.5f, 0.5f });
-	g_mesh[1].create(meshFile, v_shader_file, f_shader_file, { 3, 2, 0 }, { 0.5f, 0.5f, 0.5f });
+	g_mesh[1].create(meshFile, ".\\shaders\\perVert_lambert.vert", ".\\shaders\\perVert_lambert.frag", { 3, 2, 0 }, { 0.5f, 0.5f, 0.5f });
 	
 	// Create point lights
 	Light point1;
-	point1.position = { 3, 3, 3 };
+	point1.position = { 3, 0, 3 };
 	point1.ambientColor = { 0, 0.15f, 0 };
 	point1.diffuseColor = { 1, 1, 0 };
 	point1.specularColor = { 1, 0, 0 };
+	point1.range = 10.f;
 	point1.specularExp = 10.f;
 	pointLights.push_back(point1);
 
 	Light point2;
 	point2.position = { 1, 0, -2 };
-	point2.ambientColor = { 0, 0, 0.15 };
+	point2.ambientColor = { 0, 0, 0.15f };
 	point2.diffuseColor = { 1, 0, 1 };
 	point2.specularColor = { 1, 0, 0 };
+	point2.range = 10.f;
 	point2.specularExp = 10.f;
 	pointLights.push_back(point2);
 }
@@ -128,21 +131,25 @@ void display()
     g_cam.drawCoordinateOnScreen(g_winWidth, g_winHeight);
     g_cam.drawCoordinate();
 
-	// display the text
-	/*string str;
-	if(g_cam.isFocusMode()) {
-        str = "Cam mode: Focus";
-		g_text.draw(10, 30, const_cast<char*>(str.c_str()), g_winWidth, g_winHeight);
-	} else if(g_cam.isFPMode()) {
-        str = "Cam mode: FP";
-		g_text.draw(10, 30, const_cast<char*>(str.c_str()), g_winWidth, g_winHeight);
-	}*/
+	glMatrixMode(GL_MODELVIEW);
+
+	glLoadMatrixf(value_ptr(g_cam.viewMat));
+
+	glPushMatrix();
+	glTranslatef(pointLights[index].position.x, pointLights[index].position.y, pointLights[index].position.z);
+	glutSolidSphere(0.3f, 16, 16);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(pointLights[!index].position.x, pointLights[!index].position.y, pointLights[!index].position.z);
+	glutWireSphere(0.3f, 8, 8);
+	glPopMatrix();
 
 	g_time = (float)glutGet(GLUT_ELAPSED_TIME)/1000.0f;
 
 	for (auto& m : g_mesh)
 	{
-		m.draw(g_cam.viewMat, g_cam.projMat, pointLights, g_time);
+		m.draw(vec3(g_cam.eye), g_cam.viewMat, g_cam.projMat, pointLights, g_time);
 	}
 
     glutSwapBuffers();
@@ -181,6 +188,30 @@ void keyboard(unsigned char key, int x, int y)
 	switch(key) { 
 		case 27:
 			exit(0);
+			break;
+		case '1':
+			index = 0;
+			break;
+		case '2':
+			index = 1;
+			break;
+		case 'w':
+			pointLights[index].position.z -= 0.1f;
+			break;
+		case 's':
+			pointLights[index].position.z += 0.1f;
+			break;
+		case 'a':
+			pointLights[index].position.x -= 0.1f;
+			break;
+		case 'd':
+			pointLights[index].position.x += 0.1f;
+			break;
+		case 'q':
+			pointLights[index].position.y -= 0.1f;
+			break;
+		case 'e':
+			pointLights[index].position.y += 0.1f;
 			break;
 	}
 }

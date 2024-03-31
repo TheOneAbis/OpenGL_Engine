@@ -69,9 +69,9 @@ void ShaderProgram::setFloat1V(const char* name, unsigned int count, const float
 
 void ShaderProgram::setFloat3V(const char* name, unsigned int count, const float* floatPtr)
 {
-	int loc = glGetUniformLocation(id, name);
-	if (loc == -1) {
-		cout << "Uniform float3 vector: " << name << " doesn't exist." << endl;
+	unsigned int loc = glGetUniformLocation(id, name);
+	if (loc == -1) { // for some reason this is giving false errors
+		//cout << "Uniform float3 vector: " << name << " doesn't exist." << endl;
 	}
 	else {
 		glUniform3fv(loc, count, floatPtr);

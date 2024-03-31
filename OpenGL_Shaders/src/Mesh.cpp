@@ -176,7 +176,7 @@ void Mesh::create(const char* filename, const char* v_shader_file, const char* f
 	prepareVBOandShaders(v_shader_file, f_shader_file);
 }
 
-void Mesh::draw(mat4 viewMat, mat4 projMat, vector<Light> lights, float time) {
+void Mesh::draw(vec3 camPos, mat4 viewMat, mat4 projMat, vector<Light> lights, float time) {
 
 	glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
@@ -200,14 +200,17 @@ void Mesh::draw(mat4 viewMat, mat4 projMat, vector<Light> lights, float time) {
 	shaderProg.setMatrix4fv("projMat", 1, value_ptr(projMat));
 	shaderProg.setFloat("time", time);
 	shaderProg.setFloat("offset", normal_offset);
+	shaderProg.setInt("lightCount", (int)lights.size());
+	shaderProg.setFloat3V("cameraPosition", 1, value_ptr(camPos));
 
-	for (int i = 0; i < lights.size(); i++)
+	for (unsigned int i = 0; i < lights.size(); i++)
 	{
-		shaderProg.setFloat3V(string("lights[" + std::to_string(i) + "].position").c_str(), 1, value_ptr(lights[i].position));
-		shaderProg.setFloat3V(string("lights[" + std::to_string(i) + "].ambientColor").c_str(), 1, value_ptr(lights[i].ambientColor));
-		shaderProg.setFloat3V(string("lights[" + std::to_string(i) + "].diffuseColor").c_str(), 1, value_ptr(lights[i].diffuseColor));
-		shaderProg.setFloat3V(string("lights[" + std::to_string(i) + "].specularColor").c_str(), 1, value_ptr(lights[i].specularColor));
-		shaderProg.setFloat(string("lights[" + std::to_string(i) + "].specularExp").c_str(), lights[i].specularExp);
+		shaderProg.setFloat3V(std::string("lights[" + std::to_string(i) + "].position").c_str(), 1, value_ptr(lights[i].position));
+		shaderProg.setFloat3V(std::string("lights[" + std::to_string(i) + "].ambientColor").c_str(), 1, value_ptr(lights[i].ambientColor));
+		shaderProg.setFloat3V(std::string("lights[" + std::to_string(i) + "].diffuseColor").c_str(), 1, value_ptr(lights[i].diffuseColor));
+		shaderProg.setFloat3V(std::string("lights[" + std::to_string(i) + "].specularColor").c_str(), 1, value_ptr(lights[i].specularColor));
+		shaderProg.setFloat(std::string("lights[" + std::to_string(i) + "].range").c_str(), lights[i].range);
+		shaderProg.setFloat(std::string("lights[" + std::to_string(i) + "].specularExp").c_str(), lights[i].specularExp);
 	}
 
 	//cout << glm::to_string(modelMat) << endl;

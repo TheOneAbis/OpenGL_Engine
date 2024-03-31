@@ -13,7 +13,7 @@ out vec4 fragPos;
 
 void main() 
 {
-	normal = normalize(viewMat * modelMat * vec4(vertex_normal, 0.0f));
-	fragPos = projMat * viewMat * modelMat * vec4(vertex_position, 1.0f);
-	gl_Position = fragPos;
+	normal = normalize(inverse(transpose(modelMat)) * vec4(vertex_normal, 0.0f));
+	fragPos = modelMat * vec4(vertex_position, 1.0f);
+	gl_Position = projMat * viewMat * fragPos;
 }

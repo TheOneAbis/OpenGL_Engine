@@ -54,7 +54,7 @@ public:
     */
     void create (const char* filename, const  char* v_shader_file, const char* f_shader_file, vec3 position, vec3 scale);
 
-    void draw(mat4 viewMat, mat4 projMat, vector<Light> lights, float time);
+    void draw(vec3 camPos, mat4 viewMat, mat4 projMat, vector<Light> lights, float time);
 
 private:
 	void computeNormals(); // compute both face and vertex normals
