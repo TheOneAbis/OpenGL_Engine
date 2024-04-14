@@ -1,0 +1,44 @@
+#version 430 compatibility
+
+struct Sphere
+{
+	vec3 position;
+	float radius;
+};
+
+uniform float deltaT;
+uniform vec3 origin;
+uniform Sphere sphere;
+
+layout (std430, binding = 4) buffer Pos
+{
+	vec4 Positions [ ];
+};
+
+layout (std430, binding = 5) buffer Col 
+{
+	vec4 Colors [ ];
+};
+
+layout (local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+const float EPSILON = 0.00001f;
+
+void main()
+{
+	uint g_id = gl_GlobalInvocationID.x;
+
+	vec3 pos = Positions[g_id].xyz;
+
+	vec4 noIntersectCol = vec4(0, 0, 0.5f, 1);
+	vec4 intersectCol = vec4(0, 0.8f, 0.9f, 1);
+
+	// determine if the ray toward this pixel intersects the sphere
+	vec3 dir = normalize(pos - origin);
+	vec3 toOrigin =  origin - sphere.position;
+	float delta = pow(dot(dir, toOrigin), 2) - (pow(length(toOrigin), 2) - pow(sphere.radius, 2));
+
+	Colors[g_id] = delta >= EPSILON ? intersectCol : noIntersectCol;
+	Positions[g_id].xyz = pos;
+}
+
