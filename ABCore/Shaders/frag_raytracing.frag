@@ -7,6 +7,7 @@ const uint LIGHT_TYPE_SPOT = 2u;
 const float MAX_SPECULAR_EXPONENT = 256.f;
 const uint MAX_LIGHT_COUNT = 10u;
 const float EPSILON = 0.0001f;
+const float GLASS_REFRACTION = 0.95f;
 
 struct Light
 {
@@ -25,6 +26,10 @@ struct RaycastHit
     vec3 normal;
     vec4 texcoord;
     int object;
+    float transmissive;
+    vec3 color;
+    int reflIndex;
+    int refrIndex;
 };
 
 // Each vertex takes up 3 texels in the buffer
@@ -42,7 +47,7 @@ uniform int indexCount;
 uniform Light[MAX_LIGHT_COUNT] lights;
 uniform vec3 ambient;
 uniform vec3 screenColor;
-uniform int bounces;
+uniform int recursionDepth;
 
 uniform mat4 view;
 uniform float cameraFOV;
@@ -58,35 +63,29 @@ float DiffuseBRDF(vec3 normal, vec3 dirToLight)
     return clamp(dot(normal, dirToLight), 0.f, 1.f);
 }
 
-float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness, float roughScale)
+float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness)
 {
 	// Get reflection of light bouncing off the surface 
-    vec3 refl = reflect(lightDir, normal);
-    
     float specExponent = (1.0f - roughness) * MAX_SPECULAR_EXPONENT;
-
-	// Compare reflection against view vector, raising it to
-	// a very high power to ensure the falloff to zero is quick
-    return pow(clamp(dot(refl, viewVector), 0.f, 1.f), specExponent) * roughScale;
+    return pow(clamp(dot(reflect(lightDir, normal), viewVector), 0.f, 1.f), specExponent);
 }
 
-vec3 ColorFromLight(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness, float roughnessScale)
+vec3 Phong(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness)
 {
     // Calculate diffuse and specular values
     float diffuse = DiffuseBRDF(normal, -lightDir);
-    float spec = SpecularBRDF(normal, lightDir, viewVec, roughness, roughnessScale);
+    float spec = SpecularBRDF(normal, lightDir, viewVec, roughness);
 
     // Cut the specular if the diffuse contribution is zero
     spec *= diffuse < EPSILON ? 0.f : 1.f;
 
-    return lightColor * colorTint * diffuse + spec;
+    return lightColor * colorTint * (diffuse + spec);
 }
 
 float Attenuate(Light light, vec3 worldPos)
 {
     float dist = distance(light.Position, worldPos);
-    float att = clamp(1.0f - (dist * dist / (light.Range * light.Range)), 0.f, 1.f);
-    return att * att;
+    return pow(clamp(1.0f - (dist * dist / (light.Range * light.Range)), 0.f, 1.f), 2);
 }
 
 vec3 GetBaryCoords(vec3 origin, vec3 dir, vec3 p0, vec3 p1, vec3 p2)
@@ -144,8 +143,7 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
             texelFetch(worldData, int(p0.w) * 4 + 0), 
             texelFetch(worldData, int(p0.w) * 4 + 1), 
             texelFetch(worldData, int(p0.w) * 4 + 2), 
-            texelFetch(worldData, int(p0.w) * 4 + 3)
-            );
+            texelFetch(worldData, int(p0.w) * 4 + 3));
         vec3 p0w = vec3(world * vec4(p0.xyz, 1));
         vec3 p1w = vec3(world * vec4(texelFetch(vertData, triIndices.y * 3).xyz, 1));
         vec3 p2w = vec3(world * vec4(texelFetch(vertData, triIndices.z * 3).xyz, 1));
@@ -169,7 +167,8 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
     if (successful)
     {
         mat3 worldinvtr = mat3(inverse(transpose(hitWorld)));
-        vec3 n0 = worldinvtr * texelFetch(vertData, hitTriIndices.x * 3 + 1).xyz;
+        vec4 n = texelFetch(vertData, hitTriIndices.x * 3 + 1);
+        vec3 n0 = worldinvtr * n.xyz;
         vec3 n1 = worldinvtr * texelFetch(vertData, hitTriIndices.y * 3 + 1).xyz;
         vec3 n2 = worldinvtr * texelFetch(vertData, hitTriIndices.z * 3 + 1).xyz;
                                                
@@ -181,6 +180,7 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
         hit.normal = normalize((1 - resultUVW.x - resultUVW.y) * n0 + resultUVW.x * n1 + resultUVW.y * n2);
         hit.texcoord = (1 - resultUVW.x - resultUVW.y) * t0 + resultUVW.x * t1 + resultUVW.y * t2;
         hit.object = object;
+        hit.transmissive = n.w;
     }
 
     return successful;
@@ -222,70 +222,118 @@ vec3 GetFloorColor(vec3 worldPos)
     return color;
 }
 
+vec3 LocalIlluminate(vec3 origin, RaycastHit hit)
+{
+    vec3 baseColor = hit.object == 3 ? GetFloorColor(hit.position) : hit.texcoord.xyz;
+    float rough = clamp(hit.texcoord.w, 0.f, 0.99f);
+    vec3 viewVector = normalize(origin - hit.position);
+
+    // Calculate lighting at the hit
+    vec3 hitColor = ambient * baseColor;
+                
+    // Loop through the lights
+    for (uint i = 0u; i < MAX_LIGHT_COUNT; i++)
+    {
+        vec3 lightDir = lights[i].Type == LIGHT_TYPE_DIRECTIONAL ? lights[i].Direction * 500.f : hit.position - lights[i].Position;
+        bool attenuate = lights[i].Type != LIGHT_TYPE_DIRECTIONAL;
+
+        // shadow ray for each light; do lighting if no hit
+        if (!Raycast(hit.position, -lightDir, length(lightDir)))
+        {
+            lightDir = normalize(lightDir);
+            vec3 lightCol = Phong(hit.normal, lightDir, lights[i].Color, baseColor, viewVector, rough) * lights[i].Intensity; 
+            if (attenuate) lightCol *= Attenuate(lights[i], hit.position);
+            hitColor += lightCol;
+        }
+    }
+    return hitColor;
+}
+
 void main()
 {
     // set up initial values
-    vec3 totalLightColor;
+    vec3 totalLightColor = screenColor;
     vec3 origin = cameraPos;
     vec3 rayDir = normalize(vec3(inverse(view) * vec4(normalize(vec3(screenPos.x * cameraFOV * aspectRatio, screenPos.y * cameraFOV, -1.f)), 1)) - origin);
     float kr = 1.f;
+    float kt = 1.f;
+    float N = 1, prevN;
+    RaycastHit currentHit, firstHit;
 
-    for (int i = 0; i < bounces; i++)
+    // start w/ primary ray
+    if (Raycast(origin, rayDir, firstHit))
     {
-        // Raycast from worldPos through this pixel to see if it hits this tri
-        RaycastHit hit;
-        if (Raycast(origin, rayDir, hit))
+        totalLightColor = LocalIlluminate(origin, firstHit);
+        kr *= 1 - firstHit.texcoord.w;
+        kt *= firstHit.transmissive;
+
+        origin = firstHit.position;
+        vec3 reflDir = reflect(rayDir, firstHit.normal);
+        currentHit = firstHit;
+
+        // Reflection rays
+        while (true)
         {
-            // Calculate lighting at the hit
-            vec3 baseColor = hit.object == 3 ? GetFloorColor(hit.position) : hit.texcoord.xyz;
-            float rough = clamp(hit.texcoord.w, 0.f, 0.99f);
-            vec3 viewVector = normalize(origin - hit.position);
-            vec3 hitColor = ambient * baseColor;
-                
-            // Loop through the lights
-            for (uint i = 0u; i < MAX_LIGHT_COUNT; i++)
+            if (Raycast(origin, reflDir, currentHit))
             {
-                vec3 lightDir;
-                bool attenuate = false;
-                switch (lights[i].Type)
-                {
-                    case LIGHT_TYPE_DIRECTIONAL:
-                        lightDir = lights[i].Direction * 500.f;
-                        break;
-                    default:
-                        lightDir = hit.position - lights[i].Position;
-                        attenuate = true;
-                        break;
-                }
+                totalLightColor += kr * LocalIlluminate(origin, currentHit);
 
-                // shadow ray for each light
-                if (!Raycast(hit.position, -lightDir, length(lightDir)))
+                if (kr > EPSILON)
                 {
-                    lightDir = normalize(lightDir);
-                    vec3 lightCol = ColorFromLight(hit.normal, lightDir, lights[i].Color, baseColor, viewVector, rough, 1 - rough) * lights[i].Intensity; 
-                    
-                    // If this is a point or spot light, attenuate the color
-                    if (attenuate)
-                        lightCol *= Attenuate(lights[i], hit.position);
-
-                    hitColor += lightCol;
+                    reflDir = reflect(reflDir, currentHit.normal);
+                    origin = currentHit.position;
+                    kr *= 1 - currentHit.texcoord.w;
+                    continue;
                 }
+                break;
             }
-
-            totalLightColor += kr * hitColor;
-            kr *= 1 - rough;
-
-            // if kr is 0, light will no longer bounce, so stop
-            if (kr < 0.01f) break;
-            origin = hit.position;
-            rayDir = reflect(rayDir, hit.normal);
+            // Ray hit nothing; add ambient
+            else
+            {
+                totalLightColor += kr * screenColor;
+                break;
+            }
         }
-        else
+
+        origin = firstHit.position;
+        prevN = N;
+        N = firstHit.object == 0 ? GLASS_REFRACTION : 1.f;
+        vec3 refrDir = refract(rayDir, firstHit.normal, N / prevN);
+        currentHit = firstHit;
+
+        // Transmission rays
+        while (true)
         {
-            totalLightColor += kr * screenColor;
-            break;
+            if (Raycast(origin, refrDir, currentHit))
+            {
+                totalLightColor += kt * LocalIlluminate(origin, currentHit);
+
+                if (kt > EPSILON)
+                {
+                    if (currentHit.object == 0)
+                    {
+                        float temp = N;
+                        N = prevN == GLASS_REFRACTION ? 1.f : GLASS_REFRACTION;
+                        prevN = temp;
+                    }
+                    
+                    rayDir = refract(rayDir, currentHit.normal, N / prevN);
+                    origin = currentHit.position;
+                    kt *= currentHit.transmissive;
+                    continue;
+                }
+                break;
+            }
+            // Ray hit nothing; add ambient
+            else
+            {
+            
+                totalLightColor += kt * screenColor;
+                break;
+            }
         }
     }
+    
     // correct color w/ gamma and return final color
     fragColor = vec4(
         pow(totalLightColor.x, 1.0f / 2.2f),

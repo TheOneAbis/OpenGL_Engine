@@ -76,16 +76,20 @@ void init()
         {0, 1, 2}, {});
 
     // set up scene models
+    // mirror sphere
     smallSphere = GameObject("../Assets/sphere.fbx");
     smallSphere.SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
-    smallSphere.GetMaterial().albedo = { 0.3f, 0.3f, 0.1f };
+    smallSphere.GetMaterial().albedo = { 0.7f, 0.7f, 0.7f };
     smallSphere.GetMaterial().roughness = 0.f;
+    smallSphere.GetMaterial().transmissive = 0.f;
 
+    // glass sphere
     bigSphere = GameObject("../Assets/sphere.fbx");
     bigSphere.SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
     auto* mat = &bigSphere.GetMaterial();
-    mat->albedo = { 0.5f, 0.1f, 0.5f };
+    mat->albedo = { 1, 1, 1 };
     mat->metallic = 0.5f;
+    mat->transmissive = 0.8f;
     
     mFloor = GameObject({ Mesh(
         {
@@ -128,7 +132,7 @@ void init()
             {
                 // store which world matrix this vert should use in the position's w coord
                 vertData.push_back(glm::vec4(vert.Position, (float)worldMatData.size() - 1.f));
-                vertData.push_back(glm::vec4(vert.Normal, 1));
+                vertData.push_back(glm::vec4(vert.Normal, obj.GetMaterial().transmissive));
                 vertData.push_back(glm::vec4(obj.GetMaterial().albedo, obj.GetMaterial().roughness)); // change this later, currently just storing albedo shit
             }
         }
@@ -220,7 +224,7 @@ void display(void)
     shader.SetInt("indexCount", indexCount);
     shader.SetVector3("ambient", glm::vec3(0.1f, 0.1f, 0.1f));
     shader.SetVector3("screenColor", glm::vec3(0.25f, 0.61f, 1.f));
-    shader.SetInt("bounces", 2);
+    shader.SetInt("recursionDepth", 8);
     
     // Lighting uniform data
     for (unsigned int i = 0; i < lights.size(); i++)

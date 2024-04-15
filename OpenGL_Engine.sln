@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.8.34408.163
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGL_Engine_Raytracing", "OpenGL_Engine_Raytracing\OpenGL_Engine_Raytracing.vcxproj", "{0759E7AD-29E4-46C4-A0C5-B0BF85E5FFA3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{BC335C54-CAEE-4951-B5D6-5913C1F9881E} = {BC335C54-CAEE-4951-B5D6-5913C1F9881E}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGL_Drawing_App", "OpenGL_Drawing_App\OpenGL_Engine.vcxproj", "{02B03C8F-205B-41D8-BC34-7D3007097019}"
 EndProject
@@ -12,6 +15,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ABCore", "ABCore\ABCore.vcxproj", "{BC335C54-CAEE-4951-B5D6-5913C1F9881E}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Radiosity", "Radiosity\Radiosity.vcxproj", "{8398BD2D-7741-40D1-B1B9-CB78A4569472}"
+	ProjectSection(ProjectDependencies) = postProject
+		{BC335C54-CAEE-4951-B5D6-5913C1F9881E} = {BC335C54-CAEE-4951-B5D6-5913C1F9881E}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGL_Shaders", "OpenGL_Shaders\OpenGL_Shaders.vcxproj", "{B4EC04F0-1C11-4CCE-AE1B-EE4F2AEB22C9}"
 EndProject
