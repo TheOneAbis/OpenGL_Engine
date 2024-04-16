@@ -23,13 +23,13 @@ struct Light
 struct RaycastHit
 {
     vec3 position;
+    vec3 origin;
     vec3 normal;
     vec4 texcoord;
     int object;
     float transmissive;
     vec3 color;
-    int reflIndex;
-    int refrIndex;
+    vec3 dir;
 };
 
 // Each vertex takes up 3 texels in the buffer
@@ -249,95 +249,94 @@ vec3 LocalIlluminate(vec3 origin, RaycastHit hit)
     return hitColor;
 }
 
+struct StackStruct
+{
+    vec3 lightColor;
+    vec3 origin;
+    vec3 dir;
+    float kr;
+    float kt;
+    float N;
+    RaycastHit hit;
+    int stackState;
+};
+
 void main()
 {
     // set up initial values
-    vec3 totalLightColor = screenColor;
-    vec3 origin = cameraPos;
-    vec3 rayDir = normalize(vec3(inverse(view) * vec4(normalize(vec3(screenPos.x * cameraFOV * aspectRatio, screenPos.y * cameraFOV, -1.f)), 1)) - origin);
-    float kr = 1.f;
-    float kt = 1.f;
-    float N = 1, prevN;
-    RaycastHit currentHit, firstHit;
+    StackStruct[100] stack;
+    stack[0].lightColor = vec3(0, 0, 0);
+    stack[0].kr = 1.f;
+    stack[0].kt = 1.f;
+    stack[0].N = 1.f;
+    stack[0].origin = cameraPos;
+    stack[0].dir = normalize(vec3(inverse(view) * vec4(normalize(vec3(screenPos.x * cameraFOV * aspectRatio, screenPos.y * cameraFOV, -1.f)), 1)) - cameraPos);
+    stack[0].stackState = 0; // 0 = reflection stage, 1 = transmission stage, 2 = return color stage
+    int count = 1; // track how deep in the stack we are
 
-    // start w/ primary ray
-    if (Raycast(origin, rayDir, firstHit))
+    do
     {
-        totalLightColor = LocalIlluminate(origin, firstHit);
-        kr *= 1 - firstHit.texcoord.w;
-        kt *= firstHit.transmissive;
-
-        origin = firstHit.position;
-        vec3 reflDir = reflect(rayDir, firstHit.normal);
-        currentHit = firstHit;
-
-        // Reflection rays
-        while (true)
+        if (count >= recursionDepth)
         {
-            if (Raycast(origin, reflDir, currentHit))
-            {
-                totalLightColor += kr * LocalIlluminate(origin, currentHit);
-
-                if (kr > EPSILON)
-                {
-                    reflDir = reflect(reflDir, currentHit.normal);
-                    origin = currentHit.position;
-                    kr *= 1 - currentHit.texcoord.w;
-                    continue;
-                }
-                break;
-            }
-            // Ray hit nothing; add ambient
-            else
-            {
-                totalLightColor += kr * screenColor;
-                break;
-            }
+            count--;
+            continue;
         }
-
-        origin = firstHit.position;
-        prevN = N;
-        N = firstHit.object == 0 ? GLASS_REFRACTION : 1.f;
-        vec3 refrDir = refract(rayDir, firstHit.normal, N / prevN);
-        currentHit = firstHit;
-
-        // Transmission rays
-        while (true)
+        switch (stack[count].stackState)
         {
-            if (Raycast(origin, refrDir, currentHit))
-            {
-                totalLightColor += kt * LocalIlluminate(origin, currentHit);
-
-                if (kt > EPSILON)
+            case 0:
+                if (Raycast(stack[count].origin, stack[count].dir, stack[count].hit))
                 {
-                    if (currentHit.object == 0)
+                    stack[count].lightColor = stack[count].kr * LocalIlluminate(stack[count].origin, stack[count].hit);
+                    stack[count + 1] = stack[count];
+                    stack[count].stackState = 2;
+
+                    if (stack[count].kr > EPSILON)
                     {
-                        float temp = N;
-                        N = prevN == GLASS_REFRACTION ? 1.f : GLASS_REFRACTION;
-                        prevN = temp;
+                        // set the next stack's data (similar to passing in new params for recursive call)
+                        stack[count + 1].kr *= 1 - stack[count].hit.texcoord.w;
+                        stack[count + 1].dir = reflect(stack[count].dir, stack[count].hit.normal);
+                        stack[count + 1].origin = stack[count].hit.position;
+                        count++;
+                        continue;
                     }
-                    
-                    rayDir = refract(rayDir, currentHit.normal, N / prevN);
-                    origin = currentHit.position;
-                    kt *= currentHit.transmissive;
-                    continue;
+
+                    // "return" the light color to the previous stack
+                    stack[count - 1].lightColor += stack[count].lightColor;
+                    count--;
+                }
+                else
+                {
+                    // "return" the light color to the previous stack
+                    stack[count - 1].lightColor += stack[count].kr * screenColor;
+                    count--;
                 }
                 break;
-            }
-            // Ray hit nothing; add ambient
-            else
-            {
-            
-                totalLightColor += kt * screenColor;
+
+            case 1:
+                if (stack[count].kt > EPSILON)
+                {
+                    stack[count + 1].kt *= stack[count].hit.transmissive;
+                    stack[count + 1].N = stack[count].hit.object == 0 ? GLASS_REFRACTION : 1.f;
+                    stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count + 1].N / stack[count].N);
+                    stack[count + 1].origin = stack[count].hit.position;
+                    count++;
+                    continue;
+                }
+
                 break;
-            }
+
+            case 2:
+                // "return" the light color to the previous stack
+                stack[count - 1].lightColor += stack[count].lightColor;
+                count--;
+                break;
         }
-    }
+    } while (count > 0);
     
     // correct color w/ gamma and return final color
     fragColor = vec4(
-        pow(totalLightColor.x, 1.0f / 2.2f),
-        pow(totalLightColor.y, 1.0f / 2.2f),
-        pow(totalLightColor.z, 1.0f / 2.2f), 
+        pow(stack[0].lightColor.x, 1.0f / 2.2f),
+        pow(stack[0].lightColor.y, 1.0f / 2.2f),
+        pow(stack[0].lightColor.z, 1.0f / 2.2f), 
         1);
 }
