@@ -281,42 +281,44 @@ void main()
             count--;
             continue;
         }
+
+        // pre-initialize the next callstack before we start sending "parameters" to it
+        stack[count + 1] = stack[count];
+        stack[count + 1].stackState = 0;
+
         switch (stack[count].stackState)
         {
-            case 0:
+            case 0: // first time entering this callstack
+                stack[count].stackState = 2;
                 if (Raycast(stack[count].origin, stack[count].dir, stack[count].hit))
                 {
                     stack[count].lightColor = stack[count].kr * LocalIlluminate(stack[count].origin, stack[count].hit);
-                    stack[count + 1] = stack[count];
-                    stack[count].stackState = 2;
-
                     if (stack[count].kr > EPSILON)
                     {
                         // set the next stack's data (similar to passing in new params for recursive call)
                         stack[count + 1].kr *= 1 - stack[count].hit.texcoord.w;
+                        stack[count + 1].kt *= stack[count].hit.transmissive;
                         stack[count + 1].dir = reflect(stack[count].dir, stack[count].hit.normal);
                         stack[count + 1].origin = stack[count].hit.position;
                         count++;
                         continue;
                     }
-
-                    // "return" the light color to the previous stack
-                    stack[count - 1].lightColor += stack[count].lightColor;
-                    count--;
                 }
                 else
                 {
-                    // "return" the light color to the previous stack
+                    // no hit; add the screen color to the previous stack
                     stack[count - 1].lightColor += stack[count].kr * screenColor;
                     count--;
                 }
                 break;
 
-            case 1:
+            case 1: // returning to this callstack at the transmission stage
+                stack[count].stackState = 2;
                 if (stack[count].kt > EPSILON)
                 {
-                    stack[count + 1].kt *= stack[count].hit.transmissive;
                     stack[count + 1].N = stack[count].hit.object == 0 ? GLASS_REFRACTION : 1.f;
+                    stack[count + 1].kr *= 1 - stack[count].hit.texcoord.w;
+                    stack[count + 1].kt *= stack[count].hit.transmissive;
                     stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count + 1].N / stack[count].N);
                     stack[count + 1].origin = stack[count].hit.position;
                     count++;
@@ -325,8 +327,7 @@ void main()
 
                 break;
 
-            case 2:
-                // "return" the light color to the previous stack
+            case 2: // returning to this callstack to return the result color
                 stack[count - 1].lightColor += stack[count].lightColor;
                 count--;
                 break;
