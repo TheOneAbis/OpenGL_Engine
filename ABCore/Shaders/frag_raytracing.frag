@@ -305,6 +305,7 @@ void main()
                     stack[count].lightColor = LocalIlluminate(stack[count].origin, stack[count].hit);
                     stack[count].kr *= stack[count].hit.reflectance;
                     stack[count].kt *= stack[count].hit.transmissive;
+                    stack[count].N = stack[count - 1].hit.refraction / stack[count].hit.refraction;
 
                     // reflection ray
                     if (stack[count].kr > EPSILON)
@@ -315,7 +316,6 @@ void main()
                         stack[count + 1].dir = reflect(stack[count].dir, stack[count].hit.normal);
                         stack[count + 1].origin = stack[count].hit.position;
                         count++;
-                        continue;
                     }
                 }
                 else
@@ -323,8 +323,8 @@ void main()
                     // no hit; "return" the screen color
                     stack[count].lightColor = screenColor;
                     stack[count].stackState = 2;
-                    break;
                 }
+                break;
 
             case 1: // returning to this frame for transmission
                 stack[count].stackState = 2;
@@ -332,14 +332,13 @@ void main()
                 // transmission ray
                 if (stack[count].kt > EPSILON)
                 {
-                    stack[count + 1].N = stack[count].hit.refraction;
                     stack[count + 1].kr = stack[count].kr;
                     stack[count + 1].kt = stack[count].kt;
-                    stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count + 1].N / stack[count].N);
+                    stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal * (stack[count].hit.front ? 1.f : -1.f), stack[count].N);
                     stack[count + 1].origin = stack[count].hit.position;
                     count++;
-                    continue;
                 }
+                break;
 
             case 2: // "return" the final color
                 stack[count].lightColor *= stack[count - 1].stackState == 1 ? stack[count - 1].kr : stack[count - 1].kt;
