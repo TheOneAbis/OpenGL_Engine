@@ -315,6 +315,7 @@ void main()
                         stack[count + 1].dir = reflect(stack[count].dir, stack[count].hit.normal);
                         stack[count + 1].origin = stack[count].hit.position;
                         count++;
+                        continue;
                     }
                 }
                 else
@@ -322,8 +323,8 @@ void main()
                     // no hit; "return" the screen color
                     stack[count].lightColor = screenColor;
                     stack[count].stackState = 2;
+                    break;
                 }
-                break;
 
             case 1: // returning to this frame for transmission
                 stack[count].stackState = 2;
@@ -337,10 +338,11 @@ void main()
                     stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count + 1].N / stack[count].N);
                     stack[count + 1].origin = stack[count].hit.position;
                     count++;
+                    continue;
                 }
-                break;
 
             case 2: // "return" the final color
+                stack[count].lightColor *= stack[count - 1].stackState == 1 ? stack[count - 1].kr : stack[count - 1].kt;
                 stack[count - 1].lightColor += stack[count].lightColor;
                 count--;
                 break;
