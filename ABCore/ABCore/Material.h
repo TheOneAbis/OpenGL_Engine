@@ -12,6 +12,9 @@ namespace AB
 		float metallic = 0.f;
 		float emissive = 0.f;
 		float transmissive = 0.f;
+		float diffuse = 1.f;
+		float reflectance = 0.f;
+		float refraction = 1.f;
 
 		Material() = default;
 

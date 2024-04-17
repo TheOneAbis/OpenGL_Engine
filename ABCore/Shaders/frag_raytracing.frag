@@ -7,7 +7,6 @@ const uint LIGHT_TYPE_SPOT = 2u;
 const float MAX_SPECULAR_EXPONENT = 256.f;
 const uint MAX_LIGHT_COUNT = 10u;
 const float EPSILON = 0.0001f;
-const float GLASS_REFRACTION = 0.95f;
 
 struct Light
 {
@@ -23,13 +22,15 @@ struct Light
 struct RaycastHit
 {
     vec3 position;
-    vec3 origin;
     vec3 normal;
     vec4 texcoord;
     int object;
+    bool front;
+
     float transmissive;
-    vec3 color;
-    vec3 dir;
+    float reflectance;
+    float diffuse;
+    float refraction;
 };
 
 // Each vertex takes up 3 texels in the buffer
@@ -63,18 +64,17 @@ float DiffuseBRDF(vec3 normal, vec3 dirToLight)
     return clamp(dot(normal, dirToLight), 0.f, 1.f);
 }
 
-float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness)
+float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector)
 {
 	// Get reflection of light bouncing off the surface 
-    float specExponent = (1.0f - roughness) * MAX_SPECULAR_EXPONENT;
-    return pow(clamp(dot(reflect(lightDir, normal), viewVector), 0.f, 1.f), specExponent);
+    return pow(clamp(dot(reflect(lightDir, normal), viewVector), 0.f, 1.f), 20.f);
 }
 
-vec3 Phong(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness)
+vec3 Phong(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float specScale, float diffuseScale)
 {
     // Calculate diffuse and specular values
-    float diffuse = DiffuseBRDF(normal, -lightDir);
-    float spec = SpecularBRDF(normal, lightDir, viewVec, roughness);
+    float diffuse = DiffuseBRDF(normal, -lightDir) * diffuseScale;
+    float spec = SpecularBRDF(normal, lightDir, viewVec) * specScale;
 
     // Cut the specular if the diffuse contribution is zero
     spec *= diffuse < EPSILON ? 0.f : 1.f;
@@ -88,7 +88,7 @@ float Attenuate(Light light, vec3 worldPos)
     return pow(clamp(1.0f - (dist * dist / (light.Range * light.Range)), 0.f, 1.f), 2);
 }
 
-vec3 GetBaryCoords(vec3 origin, vec3 dir, vec3 p0, vec3 p1, vec3 p2)
+vec3 GetBaryCoords(vec3 origin, vec3 dir, vec3 p0, vec3 p1, vec3 p2, out bool front)
 {
     vec3 uvw = vec3(-1, -1, -1);
 
@@ -100,7 +100,8 @@ vec3 GetBaryCoords(vec3 origin, vec3 dir, vec3 p0, vec3 p1, vec3 p2)
     float det = dot(e1, p);
 
     // if determinant is near 0, ray lies in tri plane.
-    if (det < EPSILON)
+    front = det > 0;
+    if (abs(det) < EPSILON)
         return uvw;
 
     float f = (1.f / det);
@@ -138,17 +139,17 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
         ivec3 triIndices = ivec3(texelFetch(indexData, i + 0).x, texelFetch(indexData, i + 1).x, texelFetch(indexData, i + 2).x);
 
         // Get the first vert in this tri to get the world matrix
-        vec4 p0 = texelFetch(vertData, triIndices.x * 3);
+        vec4 p0 = texelFetch(vertData, triIndices.x * 4);
         mat4 world = mat4(
             texelFetch(worldData, int(p0.w) * 4 + 0), 
             texelFetch(worldData, int(p0.w) * 4 + 1), 
             texelFetch(worldData, int(p0.w) * 4 + 2), 
             texelFetch(worldData, int(p0.w) * 4 + 3));
         vec3 p0w = vec3(world * vec4(p0.xyz, 1));
-        vec3 p1w = vec3(world * vec4(texelFetch(vertData, triIndices.y * 3).xyz, 1));
-        vec3 p2w = vec3(world * vec4(texelFetch(vertData, triIndices.z * 3).xyz, 1));
+        vec3 p1w = vec3(world * vec4(texelFetch(vertData, triIndices.y * 4).xyz, 1));
+        vec3 p2w = vec3(world * vec4(texelFetch(vertData, triIndices.z * 4).xyz, 1));
 
-        vec3 uvw = GetBaryCoords(origin, dir, p0w, p1w, p2w);
+        vec3 uvw = GetBaryCoords(origin, dir, p0w, p1w, p2w, hit.front);
         if (uvw.z > EPSILON && uvw.z < resultUVW.z)
         {
             resultUVW = uvw;
@@ -167,20 +168,25 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
     if (successful)
     {
         mat3 worldinvtr = mat3(inverse(transpose(hitWorld)));
-        vec4 n = texelFetch(vertData, hitTriIndices.x * 3 + 1);
+        vec4 n = texelFetch(vertData, hitTriIndices.x * 4 + 1);
         vec3 n0 = worldinvtr * n.xyz;
-        vec3 n1 = worldinvtr * texelFetch(vertData, hitTriIndices.y * 3 + 1).xyz;
-        vec3 n2 = worldinvtr * texelFetch(vertData, hitTriIndices.z * 3 + 1).xyz;
+        vec3 n1 = worldinvtr * texelFetch(vertData, hitTriIndices.y * 4 + 1).xyz;
+        vec3 n2 = worldinvtr * texelFetch(vertData, hitTriIndices.z * 4 + 1).xyz;
                                                
-        vec4 t0 = texelFetch(vertData, hitTriIndices.x * 3 + 2);
-        vec4 t1 = texelFetch(vertData, hitTriIndices.y * 3 + 2);
-        vec4 t2 = texelFetch(vertData, hitTriIndices.z * 3 + 2);
+        vec4 t0 = texelFetch(vertData, hitTriIndices.x * 4 + 2);
+        vec4 t1 = texelFetch(vertData, hitTriIndices.y * 4 + 2);
+        vec4 t2 = texelFetch(vertData, hitTriIndices.z * 4 + 2);
 
         hit.position = (1 - resultUVW.x - resultUVW.y) * finalp0w + resultUVW.x * finalp1w + resultUVW.y * finalp2w;
         hit.normal = normalize((1 - resultUVW.x - resultUVW.y) * n0 + resultUVW.x * n1 + resultUVW.y * n2);
         hit.texcoord = (1 - resultUVW.x - resultUVW.y) * t0 + resultUVW.x * t1 + resultUVW.y * t2;
         hit.object = object;
         hit.transmissive = n.w;
+
+        vec4 extra = texelFetch(vertData, hitTriIndices.x * 4 + 3);
+        hit.diffuse = extra.x;
+        hit.reflectance = extra.y;
+        hit.refraction = extra.z;
     }
 
     return successful;
@@ -191,7 +197,7 @@ bool Raycast(vec3 origin, vec3 dir, float maxDistance = 99999999.f)
 {
     for (int i = 0; i < indexCount; i += 3)
     {
-        vec4 p0 = texelFetch(vertData, texelFetch(indexData, i + 0).x * 3);
+        vec4 p0 = texelFetch(vertData, texelFetch(indexData, i + 0).x * 4);
         mat4 world = mat4(
             texelFetch(worldData, int(p0.w) * 4 + 0), 
             texelFetch(worldData, int(p0.w) * 4 + 1), 
@@ -199,10 +205,11 @@ bool Raycast(vec3 origin, vec3 dir, float maxDistance = 99999999.f)
             texelFetch(worldData, int(p0.w) * 4 + 3)
             );
         vec3 p0w = vec3(world * vec4(p0.xyz, 1));
-        vec3 p1w = vec3(world * vec4(texelFetch(vertData, texelFetch(indexData, i + 1).x * 3).xyz, 1));
-        vec3 p2w = vec3(world * vec4(texelFetch(vertData, texelFetch(indexData, i + 2).x * 3).xyz, 1));
+        vec3 p1w = vec3(world * vec4(texelFetch(vertData, texelFetch(indexData, i + 1).x * 4).xyz, 1));
+        vec3 p2w = vec3(world * vec4(texelFetch(vertData, texelFetch(indexData, i + 2).x * 4).xyz, 1));
 
-        vec3 uvw = GetBaryCoords(origin, dir, p0w, p1w, p2w);
+        bool junk;
+        vec3 uvw = GetBaryCoords(origin, dir, p0w, p1w, p2w, junk);
         if (uvw.z > EPSILON && uvw.z < maxDistance)
             return true;
     }
@@ -225,7 +232,7 @@ vec3 GetFloorColor(vec3 worldPos)
 vec3 LocalIlluminate(vec3 origin, RaycastHit hit)
 {
     vec3 baseColor = hit.object == 3 ? GetFloorColor(hit.position) : hit.texcoord.xyz;
-    float rough = clamp(hit.texcoord.w, 0.f, 0.99f);
+    float spec = 1 - clamp(hit.texcoord.w, 0.f, 0.99f);
     vec3 viewVector = normalize(origin - hit.position);
 
     // Calculate lighting at the hit
@@ -241,7 +248,7 @@ vec3 LocalIlluminate(vec3 origin, RaycastHit hit)
         if (!Raycast(hit.position, -lightDir, length(lightDir)))
         {
             lightDir = normalize(lightDir);
-            vec3 lightCol = Phong(hit.normal, lightDir, lights[i].Color, baseColor, viewVector, rough) * lights[i].Intensity; 
+            vec3 lightCol = Phong(hit.normal, lightDir, lights[i].Color, baseColor, viewVector, spec, hit.diffuse) * lights[i].Intensity; 
             if (attenuate) lightCol *= Attenuate(lights[i], hit.position);
             hitColor += lightCol;
         }
@@ -264,7 +271,7 @@ struct StackStruct
 void main()
 {
     // set up initial values
-    StackStruct[100] stack;
+    StackStruct[10] stack;
     stack[0].lightColor = vec3(0, 0, 0);
     stack[0].kr = 1.f;
     stack[0].kt = 1.f;
@@ -272,62 +279,68 @@ void main()
     stack[0].origin = cameraPos;
     stack[0].dir = normalize(vec3(inverse(view) * vec4(normalize(vec3(screenPos.x * cameraFOV * aspectRatio, screenPos.y * cameraFOV, -1.f)), 1)) - cameraPos);
     stack[0].stackState = 0; // 0 = reflection stage, 1 = transmission stage, 2 = return color stage
+    stack[1] = stack[0];
     int count = 1; // track how deep in the stack we are
-
+    
     do
     {
-        if (count >= recursionDepth)
+        if (count > recursionDepth)
         {
             count--;
             continue;
         }
 
-        // pre-initialize the next callstack before we start sending "parameters" to it
+        // pre-initialize the next stack frame before we start sending "parameters" to it
         stack[count + 1] = stack[count];
         stack[count + 1].stackState = 0;
 
         switch (stack[count].stackState)
         {
-            case 0: // first time entering this callstack
-                stack[count].stackState = 2;
+            case 0: // first time entering this stack frame
                 if (Raycast(stack[count].origin, stack[count].dir, stack[count].hit))
                 {
-                    stack[count].lightColor = stack[count].kr * LocalIlluminate(stack[count].origin, stack[count].hit);
+                    stack[count].stackState = 1;
+
+                    // local illumination
+                    stack[count].lightColor = LocalIlluminate(stack[count].origin, stack[count].hit);
+                    stack[count].kr *= stack[count].hit.reflectance;
+                    stack[count].kt *= stack[count].hit.transmissive;
+
+                    // reflection ray
                     if (stack[count].kr > EPSILON)
                     {
-                        // set the next stack's data (similar to passing in new params for recursive call)
-                        stack[count + 1].kr *= 1 - stack[count].hit.texcoord.w;
-                        stack[count + 1].kt *= stack[count].hit.transmissive;
+                        // set the next frame's data (similar to passing in new params for recursive call)
+                        stack[count + 1].kr = stack[count].kr;
+                        stack[count + 1].kt = stack[count].kt;
                         stack[count + 1].dir = reflect(stack[count].dir, stack[count].hit.normal);
                         stack[count + 1].origin = stack[count].hit.position;
                         count++;
-                        continue;
                     }
                 }
                 else
                 {
-                    // no hit; add the screen color to the previous stack
-                    stack[count - 1].lightColor += stack[count].kr * screenColor;
-                    count--;
+                    // no hit; "return" the screen color
+                    stack[count].lightColor = screenColor;
+                    stack[count].stackState = 2;
                 }
                 break;
 
-            case 1: // returning to this callstack at the transmission stage
+            case 1: // returning to this frame for transmission
                 stack[count].stackState = 2;
+
+                // transmission ray
                 if (stack[count].kt > EPSILON)
                 {
-                    stack[count + 1].N = stack[count].hit.object == 0 ? GLASS_REFRACTION : 1.f;
-                    stack[count + 1].kr *= 1 - stack[count].hit.texcoord.w;
-                    stack[count + 1].kt *= stack[count].hit.transmissive;
+                    stack[count + 1].N = stack[count].hit.refraction;
+                    stack[count + 1].kr = stack[count].kr;
+                    stack[count + 1].kt = stack[count].kt;
                     stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count + 1].N / stack[count].N);
                     stack[count + 1].origin = stack[count].hit.position;
                     count++;
-                    continue;
                 }
-
                 break;
 
-            case 2: // returning to this callstack to return the result color
+            case 2: // "return" the final color
                 stack[count - 1].lightColor += stack[count].lightColor;
                 count--;
                 break;

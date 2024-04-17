@@ -82,14 +82,19 @@ void init()
     smallSphere.GetMaterial().albedo = { 0.7f, 0.7f, 0.7f };
     smallSphere.GetMaterial().roughness = 0.f;
     smallSphere.GetMaterial().transmissive = 0.f;
+    smallSphere.GetMaterial().reflectance = 0.75f;
+    smallSphere.GetMaterial().diffuse = 0.25f;
 
     // glass sphere
     bigSphere = GameObject("../Assets/sphere.fbx");
     bigSphere.SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
-    auto* mat = &bigSphere.GetMaterial();
-    mat->albedo = { 1, 1, 1 };
-    mat->metallic = 0.5f;
-    mat->transmissive = 0.8f;
+    bigSphere.GetMaterial().albedo = { 1, 1, 1 };
+    bigSphere.GetMaterial().roughness = 0.8f;
+    bigSphere.GetMaterial().metallic = 0.5f;
+    bigSphere.GetMaterial().transmissive = 0.8f;
+    bigSphere.GetMaterial().reflectance = 0.01f;
+    bigSphere.GetMaterial().diffuse = 0.075f;
+    bigSphere.GetMaterial().refraction = 0.95f;
     
     mFloor = GameObject({ Mesh(
         {
@@ -125,15 +130,17 @@ void init()
         {
             for (auto& i : mesh.indices)
             {
-                indexData.push_back(i + (vertData.size() / 3));
+                indexData.push_back(i + (vertData.size() / 4));
             }
             
             for (auto& vert : mesh.vertices)
             {
+                Material& m = obj.GetMaterial();
                 // store which world matrix this vert should use in the position's w coord
                 vertData.push_back(glm::vec4(vert.Position, (float)worldMatData.size() - 1.f));
-                vertData.push_back(glm::vec4(vert.Normal, obj.GetMaterial().transmissive));
-                vertData.push_back(glm::vec4(obj.GetMaterial().albedo, obj.GetMaterial().roughness)); // change this later, currently just storing albedo shit
+                vertData.push_back(glm::vec4(vert.Normal, m.transmissive));
+                vertData.push_back(glm::vec4(m.albedo, m.roughness));
+                vertData.push_back(glm::vec4(m.diffuse, m.reflectance, m.refraction, 0));
             }
         }
     }
@@ -224,7 +231,7 @@ void display(void)
     shader.SetInt("indexCount", indexCount);
     shader.SetVector3("ambient", glm::vec3(0.1f, 0.1f, 0.1f));
     shader.SetVector3("screenColor", glm::vec3(0.25f, 0.61f, 1.f));
-    shader.SetInt("recursionDepth", 8);
+    shader.SetInt("recursionDepth", 2);
     
     // Lighting uniform data
     for (unsigned int i = 0; i < lights.size(); i++)
