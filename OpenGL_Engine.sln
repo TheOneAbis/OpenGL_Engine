@@ -23,6 +23,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGL_Shaders", "OpenGL_Sh
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGL_Particles", "OpenGL_Particles\OpenGL_Particles.vcxproj", "{E54BE014-F11A-4035-838A-1D34F03B5F84}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenGL_SSR", "OpenGL_SSR\OpenGL_SSR.vcxproj", "{7101609C-9337-462D-BB89-B66D9B32FC84}"
+	ProjectSection(ProjectDependencies) = postProject
+		{BC335C54-CAEE-4951-B5D6-5913C1F9881E} = {BC335C54-CAEE-4951-B5D6-5913C1F9881E}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -87,6 +92,14 @@ Global
 		{E54BE014-F11A-4035-838A-1D34F03B5F84}.Release|x64.Build.0 = Release|x64
 		{E54BE014-F11A-4035-838A-1D34F03B5F84}.Release|x86.ActiveCfg = Release|Win32
 		{E54BE014-F11A-4035-838A-1D34F03B5F84}.Release|x86.Build.0 = Release|Win32
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Debug|x64.ActiveCfg = Debug|x64
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Debug|x64.Build.0 = Debug|x64
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Debug|x86.ActiveCfg = Debug|Win32
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Debug|x86.Build.0 = Debug|Win32
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Release|x64.ActiveCfg = Release|x64
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Release|x64.Build.0 = Release|x64
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Release|x86.ActiveCfg = Release|Win32
+		{7101609C-9337-462D-BB89-B66D9B32FC84}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

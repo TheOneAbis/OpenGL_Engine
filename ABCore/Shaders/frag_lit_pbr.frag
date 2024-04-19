@@ -36,7 +36,7 @@ float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness,
     return pow(clamp(dot(refl, viewVector), 0, 1), specExponent) * roughScale;
 }
 
-vec3 ColorFromLight(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness, float roughnessScale)
+vec3 Phong(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness, float roughnessScale)
 {
     // Calculate diffuse and specular values
     float diffuse = DiffuseBRDF(normal, -lightDir);
@@ -45,7 +45,7 @@ vec3 ColorFromLight(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint,
     // Cut the specular if the diffuse contribution is zero
     spec *= diffuse == 0.f ? 0.f : 1.f;
 
-    return lightColor * colorTint * diffuse + spec;
+    return lightColor * colorTint * (diffuse + spec);
 }
 
 float Attenuate(Light light, vec3 worldPos)
@@ -155,7 +155,7 @@ vec3 MicrofacetBRDF(vec3 n, vec3 l, vec3 v, float roughness, vec3 f0, out vec3 F
     return specularResult * max(dot(n, l), 0);
 }
 
-vec3 ColorFromLightPBR(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor,
+vec3 CookTorrence(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor,
     vec3 viewVec, float lightIntensity, float roughness, float metalness, vec3 specColor)
 {
     // Diffuse is unchanged from non-PBR
@@ -171,6 +171,9 @@ vec3 ColorFromLightPBR(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surface
     // Combine the final diffuse and specular values for this light
     return (balancedDiff * surfaceColor + spec) * lightIntensity * lightColor;
 }
+
+// Texture samplers
+
 
 // INPUTS, UNIFORM, OUTPUTS
 in vec3 worldPos;
@@ -217,7 +220,7 @@ void main()
                 attenuate = true;
                 break;
         }
-        vec3 lightCol = ColorFromLightPBR(newNormal, lightDir, lights[i].Color, albedoColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
+        vec3 lightCol = CookTorrence(newNormal, lightDir, lights[i].Color, albedoColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
 
         // If this is a point or spot light, attenuate the color
         if (attenuate)

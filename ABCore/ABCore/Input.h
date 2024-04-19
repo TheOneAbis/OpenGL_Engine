@@ -2,6 +2,8 @@
 
 #include <unordered_map>
 
+typedef struct GLFWwindow GLFWwindow;
+
 namespace glm
 {
 	enum precision;
@@ -38,7 +40,7 @@ namespace AB
 		glm::vec2& GetLastMousePos();
 		glm::vec2 GetMouseDelta();
 
-		void Init();
+		void Init(GLFWwindow* window);
 		void Update();
 
 		Input(Input const&) = delete;
@@ -46,7 +48,7 @@ namespace AB
 
 		~Input();
 
-		std::unordered_map<char, bool>& GetKeyMap();
+		std::unordered_map<int, bool>& GetKeyMap();
 		std::unordered_map<int, bool>& GetMouseMap();
 	private:
 
@@ -54,8 +56,8 @@ namespace AB
 
 		Input() {};
 
-		std::unordered_map<char, bool> keymap;
-		std::unordered_map<char, bool> prevkeymap;
+		std::unordered_map<int, bool> keymap;
+		std::unordered_map<int, bool> prevkeymap;
 		std::unordered_map<int, bool> mousemap;
 		std::unordered_map<int, bool> prevmousemap;
 

@@ -1,12 +1,7 @@
 #include "Input.h"
 
 #include <glm/glm.hpp>
-
-#ifdef __APPLE__
-#include <GLUT/glut.h> // include glut for Mac
-#else
-#include <GL/freeglut.h> //include glut for Windows
-#endif
+#include <GLFW/glfw3.h>
 
 using namespace std;
 using namespace AB;
@@ -38,7 +33,7 @@ bool Input::MouseButtonReleased(int button)
 	return !mousemap[button] && prevmousemap[button];
 }
 
-unordered_map<char, bool>& Input::GetKeyMap()
+unordered_map<int, bool>& Input::GetKeyMap()
 {
 	return keymap;
 }
@@ -58,34 +53,27 @@ glm::vec2 Input::GetMouseDelta()
 {
 	return *mousePos - *prevMousePos;
 }
-
-void ProcessKeyInput(unsigned char key, int xMouse, int yMouse)
+#include <iostream>
+void ProcessKeyInput(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	Input::Get().GetKeyMap()[key] = true;
+	Input::Get().GetKeyMap()[key] = action != 0;
 }
-void ProcessKeyUpInput(unsigned char key, int xMouse, int yMouse)
+void ProcessMouseInput(GLFWwindow* window, int button, int action, int mods)
 {
-	Input::Get().GetKeyMap()[key] = false;
+	Input::Get().GetMouseMap()[button] = action == 1;
 }
-void ProcessMouseInput(int button, int state, int x, int y)
-{
-	Input::Get().GetMouseMap()[button] = !state;
-}
-void ProcessMouseMotion(int x, int y)
+void ProcessMouseMotion(GLFWwindow* window, double x, double y)
 {
 	Input::Get().GetMousePos() = glm::vec2(x, y);
 }
 
-void Input::Init()
+void Input::Init(GLFWwindow* window)
 {
 	mousePos = new glm::vec2();
 	prevMousePos = new glm::vec2();
-
-	glutKeyboardFunc(ProcessKeyInput);
-	glutKeyboardUpFunc(ProcessKeyUpInput);
-	glutMouseFunc(ProcessMouseInput);
-	glutMotionFunc(ProcessMouseMotion);
-	glutPassiveMotionFunc(ProcessMouseMotion);
+	glfwSetKeyCallback(window, ProcessKeyInput);
+	glfwSetCursorPosCallback(window, ProcessMouseMotion);
+	glfwSetMouseButtonCallback(window, ProcessMouseInput);
 }
 void Input::Update()
 {
