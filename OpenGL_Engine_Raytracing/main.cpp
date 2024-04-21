@@ -10,14 +10,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/constants.hpp>
 
-#ifdef __APPLE__
-#include <GLUT/glut.h> // include glut for Mac
-#else
-#include <GL/freeglut.h> //include glut for Windows
-#endif
+#include <GLFW/glfw3.h>
 
 #include <iostream>
-#include <ABCore/GameObject.h>
+#include <ABCore/Scene.h>
 #include <ABCore/Input.h>
 
 using namespace std;
@@ -47,8 +43,7 @@ enum LightType : int
 vector<Light> lights;
 Shader shader;
 Mesh tri;
-GameObject smallSphere, bigSphere, cone, mFloor;
-std::vector<GameObject> gameObjects;
+GameObject* smallSphere, * bigSphere, * cone, * mFloor;
 
 Transform camTM;
 glm::vec2 camEulers;
@@ -63,7 +58,7 @@ void init()
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
 
-    oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+    oldT = glfwGetTime();
 
     // set up shader
     shader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_raytracing.frag");
@@ -77,26 +72,26 @@ void init()
 
     // set up scene models
     // mirror sphere
-    smallSphere = GameObject("../Assets/sphere.fbx");
-    smallSphere.SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
-    smallSphere.GetMaterial().albedo = { 0.7f, 0.7f, 0.7f };
-    smallSphere.GetMaterial().roughness = 0.f;
-    smallSphere.GetMaterial().transmissive = 0.f;
-    smallSphere.GetMaterial().reflectance = 0.75f;
-    smallSphere.GetMaterial().diffuse = 0.25f;
+    smallSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
+    smallSphere->SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
+    smallSphere->GetMaterial().albedo = { 0.7f, 0.7f, 0.7f };
+    smallSphere->GetMaterial().roughness = 0.f;
+    smallSphere->GetMaterial().transmissive = 0.f;
+    smallSphere->GetMaterial().reflectance = 0.75f;
+    smallSphere->GetMaterial().diffuse = 0.25f;
 
     // glass sphere
-    bigSphere = GameObject("../Assets/sphere.fbx");
-    bigSphere.SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
-    bigSphere.GetMaterial().albedo = { 1, 1, 1 };
-    bigSphere.GetMaterial().roughness = 0.8f;
-    bigSphere.GetMaterial().metallic = 0.5f;
-    bigSphere.GetMaterial().transmissive = 0.8f;
-    bigSphere.GetMaterial().reflectance = 0.01f;
-    bigSphere.GetMaterial().diffuse = 0.075f;
-    bigSphere.GetMaterial().refraction = 0.95f;
+    bigSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
+    bigSphere->SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
+    bigSphere->GetMaterial().albedo = { 1, 1, 1 };
+    bigSphere->GetMaterial().roughness = 0.8f;
+    bigSphere->GetMaterial().metallic = 0.5f;
+    bigSphere->GetMaterial().transmissive = 0.8f;
+    bigSphere->GetMaterial().reflectance = 0.01f;
+    bigSphere->GetMaterial().diffuse = 0.075f;
+    bigSphere->GetMaterial().refraction = 0.95f;
     
-    mFloor = GameObject({ Mesh(
+    mFloor = Scene::Get().Add(GameObject({ Mesh(
         {
             { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
             { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
@@ -104,11 +99,9 @@ void init()
             { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
         }, 
         { 0, 1, 2, 0, 2, 3 }, 
-        vector<Texture>()) });
-    mFloor.SetWorldTM(Transform({-2, -1, 0}, glm::quat(), {3, 1, 5}));
-    mFloor.GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
-
-    gameObjects = { bigSphere, smallSphere, cone, mFloor };
+        vector<Texture>()) }));
+    mFloor->SetWorldTM(Transform({-2, -1, 0}, glm::quat(), {3, 1, 5}));
+    mFloor->GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
 
     // set up light
     Light dirLight = {};
@@ -122,7 +115,7 @@ void init()
     vector<glm::vec4> vertData;
     vector<unsigned int> indexData;
     vector<glm::mat4> worldMatData;
-    for (auto& obj : gameObjects)
+    for (auto& obj : Scene::Get().GetAllObjects())
     {
         worldMatData.push_back(obj.GetWorldTM().GetMatrix());
 
@@ -179,7 +172,7 @@ void init()
 
 void Tick()
 {
-    float newT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+    float newT = glfwGetTime();
     dt = newT - oldT;
     oldT = newT;
 
@@ -190,17 +183,17 @@ void Tick()
     }
 
     glm::vec3 camVel = {};
-    if (Input::Get().KeyDown('w'))
+    if (Input::Get().KeyDown(GLFW_KEY_W))
         camVel.z = -1.f;
-    if (Input::Get().KeyDown('a'))
+    if (Input::Get().KeyDown(GLFW_KEY_A))
         camVel.x = -1.f;
-    if (Input::Get().KeyDown('s'))
+    if (Input::Get().KeyDown(GLFW_KEY_S))
         camVel.z = 1.f;
-    if (Input::Get().KeyDown('d'))
+    if (Input::Get().KeyDown(GLFW_KEY_D))
         camVel.x = 1.f;
-    if (Input::Get().KeyDown('q'))
+    if (Input::Get().KeyDown(GLFW_KEY_Q))
         camVel.y = -1.f;
-    if (Input::Get().KeyDown('e'))
+    if (Input::Get().KeyDown(GLFW_KEY_E))
         camVel.y = 1.f;
 
     glm::vec3 t = glm::normalize(camVel);
@@ -208,8 +201,6 @@ void Tick()
         camTM.Translate(t * camTM.GetRotation() * dt * 3.f);
 
     Input::Get().Update();
-
-    glutPostRedisplay();
 }
 
 // called when the GL context need to be rendered
@@ -256,12 +247,10 @@ void display(void)
     glActiveTexture(GL_TEXTURE0);
 
     tri.Draw(shader);
-
-    glutSwapBuffers();
 }
 
 // called when window is first created or when window is resized
-void reshape(int w, int h)
+void reshape(GLFWwindow* window, int w, int h)
 {
     // update thescreen dimensions
     width = w;
@@ -269,23 +258,31 @@ void reshape(int w, int h)
 
     /* tell OpenGL to use the whole window for drawing */
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
-
-    glutPostRedisplay();
 }
 
 int main(int argc, char* argv[])
 {
-    //initialize GLUT
-    glutInit(&argc, argv);
+    // initialize GLFW
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // double bufferred
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
 
-    //set the initial window size
-    glutInitWindowSize((int)width, (int)height);
-
-    // create the window with a title
-    glutCreateWindow("OpenGL Program");
+    // initialize GLEW
+    glewExperimental = GL_TRUE;
+    GLFWwindow* window = glfwCreateWindow(width, height, "Ray Tracer", NULL, NULL);
+    if (window == NULL)
+    {
+        cout << "Failed to create GLFW window" << endl;
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, reshape);
 
     GLenum err = glewInit();
     if (GLEW_OK != err)
@@ -295,25 +292,19 @@ int main(int argc, char* argv[])
     }
     fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 
+    // initialize everything else
     init();
+    Input::Get().Init(window);
 
-    /* --- register callbacks with GLUT --- */
-
-    //register function to handle window resizes
-    glutReshapeFunc(reshape);
-
-    //register function that draws in the window
-    //glutDisplayFunc(display);
-
-    glutIdleFunc(Tick);
-
-    // Processing input
-    Input::Get().Init();
-
+    // Main Loop
+    Tick();
     display();
+    glfwSwapBuffers(window);
+    while (!glfwWindowShouldClose(window))
+    {
+        glfwPollEvents();
+    }
 
-    //start the glut main loop
-    glutMainLoop();
-
+    glfwTerminate();
     return 0;
 }

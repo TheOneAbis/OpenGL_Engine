@@ -53,7 +53,7 @@ glm::vec2 Input::GetMouseDelta()
 {
 	return *mousePos - *prevMousePos;
 }
-#include <iostream>
+
 void ProcessKeyInput(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	Input::Get().GetKeyMap()[key] = action != 0;

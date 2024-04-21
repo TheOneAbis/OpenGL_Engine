@@ -231,7 +231,7 @@ vec3 GetFloorColor(vec3 worldPos)
 
 vec3 LocalIlluminate(vec3 origin, RaycastHit hit)
 {
-    vec3 baseColor = hit.object == 3 ? GetFloorColor(hit.position) : hit.texcoord.xyz;
+    vec3 baseColor = hit.object == 2 ? GetFloorColor(hit.position) : hit.texcoord.xyz;
     float spec = 1 - clamp(hit.texcoord.w, 0.f, 0.99f);
     vec3 viewVector = normalize(origin - hit.position);
 

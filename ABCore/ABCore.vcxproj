@@ -23,6 +23,7 @@
     <ClCompile Include="ABCore\Input.cpp" />
     <ClCompile Include="ABCore\Material.cpp" />
     <ClCompile Include="ABCore\Mesh.cpp" />
+    <ClCompile Include="ABCore\Scene.cpp" />
     <ClCompile Include="ABCore\Shader.cpp" />
     <ClCompile Include="ABCore\Transform.cpp" />
   </ItemGroup>
@@ -31,6 +32,7 @@
     <ClInclude Include="ABCore\Input.h" />
     <ClInclude Include="ABCore\Material.h" />
     <ClInclude Include="ABCore\Mesh.h" />
+    <ClInclude Include="ABCore\Scene.h" />
     <ClInclude Include="ABCore\Shader.h" />
     <ClInclude Include="ABCore\Transform.h" />
   </ItemGroup>
