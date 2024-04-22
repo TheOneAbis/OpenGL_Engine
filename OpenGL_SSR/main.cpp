@@ -169,7 +169,7 @@ void display()
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
     shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
     shader.SetVector3("cameraPosition", camTM.GetTranslation());
-    shader.SetVector3("ambient", glm::vec3(0.0f, 0.0f, 0.0f));
+    shader.SetVector3("ambient", glm::vec3(0.05f, 0.05f, 0.05f));
 
     // Lighting uniform data
     for (unsigned int i = 0; i < lights.size(); i++)
@@ -184,6 +184,8 @@ void display()
     }
 
     Scene::Get().Render(shader);
+
+    // TODO: add SSR shader stuff here
 }
 
 // called when window is first created or when window is resized

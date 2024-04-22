@@ -47,6 +47,14 @@ GameObject* Scene::Find(std::string objName)
 	return nullptr;
 }
 
+void Scene::Render(Shader& shader)
+{
+	for (auto& obj : gameobjects)
+	{
+		obj.Draw(shader);
+	}
+}
+
 KDNode* CreateNode(vector<Vertex>* allVerts, vector<unsigned int> indices, int depth, int maxDepth, glm::vec3 min, glm::vec3 max)
 {
 	if (depth > maxDepth || indices.empty()) return nullptr;
@@ -88,19 +96,13 @@ KDNode* CreateNode(vector<Vertex>* allVerts, vector<unsigned int> indices, int d
 		glm::vec3 p0 = (*allVerts)[i + 0].Position;
 		glm::vec3 p1 = (*allVerts)[i + 1].Position;
 		glm::vec3 p2 = (*allVerts)[i + 2].Position;
-		// TODO: SAT TEST
+		
+		// SAT test; if tri is inside partitioned AABB, add it to the list
+
 	}
 
 	newNode->left = CreateNode(allVerts, leftIndices, depth + 1, maxDepth, leftMin, leftMax);
 	newNode->right = CreateNode(allVerts, rightIndices, depth + 1, maxDepth, rightMin, rightMax);
-}
-
-void Scene::Render(Shader& shader)
-{
-	for (auto& obj : gameobjects)
-	{
-		obj.Draw(shader);
-	}
 }
 
 void Scene::CreateTree(int maxDepth)

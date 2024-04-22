@@ -222,7 +222,6 @@ void GameObject::Draw(Shader& shader, int drawMode)
 	glm::mat4x4 world = worldTm.GetMatrix();
 
 	shader.SetMatrix4x4("world", world);
-	shader.SetMatrix4x4("worldInvTranspose", glm::inverse(glm::transpose(world)));
 
 	shader.SetVector3("albedoColor", material.albedo);
 	shader.SetFloat("metallic", material.metallic);

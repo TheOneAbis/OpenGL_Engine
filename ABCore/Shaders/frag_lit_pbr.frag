@@ -170,7 +170,6 @@ vec3 CookTorrence(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor
 uniform sampler2D texture_diffuse[1];
 uniform sampler2D texture_specular[1];
 uniform sampler2D texture_normal[1];
-uniform uint normalTextures;
 
 // INPUTS, UNIFORM, OUTPUTS
 in vec3 worldPos;
@@ -187,11 +186,16 @@ uniform vec3 cameraPosition;
 uniform Light[MAX_LIGHT_COUNT] lights;
 
 out vec4 fragColor;
+out vec4 fragNormal;
+out vec4 fragWorldPos;
 
 void main()
 {
     vec3 newNormal = normalize(normal);
+    fragNormal = vec4(newNormal, 1);
+
     vec3 viewVector = normalize(cameraPosition - worldPos);
+    fragWorldPos = vec4(worldPos, 1);
 
     // Get the actual base color from albedo and any textures
     vec3 baseColor = albedoColor * texture(texture_diffuse[0], texCoord).xyz;
