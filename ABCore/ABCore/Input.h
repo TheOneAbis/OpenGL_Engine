@@ -28,9 +28,9 @@ namespace AB
 			return *instance;
 		}
 
-		bool KeyDown(const char key);
-		bool KeyPressed(const char key);
-		bool KeyReleased(const char key);
+		bool KeyDown(int key);
+		bool KeyPressed(int key);
+		bool KeyReleased(int key);
 
 		bool MouseButtonDown(int button);
 		bool MouseButtonPressed(int button);

@@ -1,6 +1,8 @@
 #pragma comment(lib, "ABCore.lib")
 
 #include <GL/glew.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 // GLM math library
 #define GLM_FORCE_RADIANS
@@ -13,7 +15,7 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
-#include <ABCore/GameObject.h>
+#include <ABCore/Scene.h>
 #include <ABCore/Input.h>
 
 using namespace std;
@@ -42,14 +44,16 @@ enum LightType : int
 
 vector<Light> lights;
 Shader shader;
-std::vector<GameObject> gameObjects;
 
 Transform camTM;
 glm::vec2 camEulers;
 float dt, oldT;
+float camSpeed = 30.f;
 
 void init()
 {
+    stbi_set_flip_vertically_on_load(true);
+
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
     
@@ -59,32 +63,43 @@ void init()
     shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
 
     // set up scene models
-    gameObjects.push_back(GameObject("../Assets/Fir_Tree.fbx", "Fir Tree"));
-    gameObjects.back().SetWorldTM({ -0.2, 0, -3.f }, glm::quat({ 0, 0.7, 0 }), { 0.1, 0.1, 0.1 });
+    Scene& scene = Scene::Get();
+    GameObject* firTree = scene.Add(GameObject("../Assets/Fir_Tree.fbx", "Fir Tree"));
+    firTree->SetWorldTM({ 10, 0, -20.f }, glm::quat({ 0, 0.7, 0 }), { 0.1, 0.1, 0.1 });
+    for (Mesh& m : firTree->GetMeshes())
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
-    gameObjects.push_back(GameObject("../Assets/Poplar_Tree.fbx", "Poplar Tree"));
-    gameObjects.back().SetWorldTM({ 50, 0, -20 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    GameObject* poplarTree = scene.Add(GameObject("../Assets/Poplar_Tree.fbx", "Poplar Tree"));
+    poplarTree->SetWorldTM({ 40, 0, -20 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    for (Mesh& m : poplarTree->GetMeshes())
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
-    gameObjects.push_back(GameObject("../Assets/Palm_Tree.fbx", "Palm Tree"));
-    gameObjects.back().SetWorldTM({ 75, 0, -50 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    GameObject* palmTree = scene.Add(GameObject("../Assets/Palm_Tree.fbx", "Palm Tree"));
+    palmTree->SetWorldTM({ 50, 0, -45 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    for (Mesh& m : palmTree->GetMeshes())
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
-    gameObjects.push_back(GameObject("../Assets/Oak_Tree.fbx", "Oak Tree"));
-    gameObjects.back().SetWorldTM({ 15, 0, -90 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    GameObject* oakTree = scene.Add(GameObject("../Assets/Oak_Tree.fbx", "Oak Tree"));
+    oakTree->SetWorldTM({ 25, 0, -60 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    for (Mesh& m : oakTree->GetMeshes())
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
     // WALLS
     vector<Mesh> plane = { Mesh(
         {
             { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
-            { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
-            { glm::vec3(1.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) },
-            { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
+            { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(20.f, 0.f) },
+            { glm::vec3(1.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(20.f, 20.f) },
+            { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 20.f) }
         },
         { 0, 1, 2, 0, 2, 3 },
         vector<Texture>()) };
 
     vector<int> indices = { 0, 1, 2, 0, 2, 3 };
-    gameObjects.push_back(GameObject(plane, "Floor"));
-    gameObjects.back().SetWorldTM(Transform({ -500, 0, 500 }, glm::quat(), { 1000, 1, 1000 }));
+    GameObject* ground = scene.Add(GameObject("../Assets/Terrain.fbx", "Ground"));
+    ground->SetWorldTM(Transform({ 400, -30, -425 }, glm::quat(), { 0.1, 0.1, 0.1 }));
+    for (Mesh& m : ground->GetMeshes())
+        m.AddTexture("texture_diffuse", "forest_ground.png", "../Assets");
 
     // set up lights
     Light point = {};
@@ -92,13 +107,13 @@ void init()
     point.Color = glm::vec3(1, 1, 1);
     point.Intensity = 1;
     point.Position = glm::vec3(2, 2, -2.5);
-    point.Range = 100;
+    point.Range = 20;
     lights.push_back(point);
 
     Light sun = {};
     sun.Type = LIGHT_TYPE_DIRECTIONAL;
     sun.Color = glm::vec3(1, 1, 1);
-    sun.Intensity = 1.f;
+    sun.Intensity = 0.5f;
     sun.Direction = {1, -1, 0.5f};
     lights.push_back(sun);
 }
@@ -116,6 +131,7 @@ void Tick()
     }
 
     glm::vec3 camVel = {};
+    float speed = camSpeed;
     if (Input::Get().KeyDown(GLFW_KEY_W))
         camVel.z = -1.f;
     if (Input::Get().KeyDown(GLFW_KEY_A))
@@ -128,10 +144,12 @@ void Tick()
         camVel.y = -1.f;
     if (Input::Get().KeyDown(GLFW_KEY_E))
         camVel.y = 1.f;
+    if (Input::Get().KeyDown(GLFW_KEY_LEFT_SHIFT))
+        speed *= 2.f;
 
     glm::vec3 t = glm::normalize(camVel);
     if (!isnan(t.x))
-        camTM.Translate(t * camTM.GetRotation() * dt * 30.f);
+        camTM.Translate(t * camTM.GetRotation() * dt * speed);
 
     Input::Get().Update();
 }
@@ -165,10 +183,7 @@ void display()
         shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
     }
 
-    for (auto& obj : gameObjects)
-    {
-        obj.Draw(shader);
-    }
+    Scene::Get().Render(shader);
 }
 
 // called when window is first created or when window is resized

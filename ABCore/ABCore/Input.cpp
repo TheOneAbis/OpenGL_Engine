@@ -8,15 +8,15 @@ using namespace AB;
 
 Input* Input::instance;
 
-bool Input::KeyDown(const char key)
+bool Input::KeyDown(int key)
 {
 	return keymap[key];
 }
-bool Input::KeyPressed(const char key)
+bool Input::KeyPressed(int key)
 {
 	return keymap[key] && !prevkeymap[key];
 }
-bool Input::KeyReleased(const char key)
+bool Input::KeyReleased(int key)
 {
 	return !keymap[key] && prevkeymap[key];
 }
@@ -53,7 +53,7 @@ glm::vec2 Input::GetMouseDelta()
 {
 	return *mousePos - *prevMousePos;
 }
-
+#include <iostream>
 void ProcessKeyInput(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	Input::Get().GetKeyMap()[key] = action != 0;

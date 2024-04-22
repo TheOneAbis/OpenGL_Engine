@@ -27,6 +27,8 @@ namespace AB
 
 		void CreateTree(int depth);
 
+		void Render(Shader& shader);
+
 		~Scene();
 
 	private:

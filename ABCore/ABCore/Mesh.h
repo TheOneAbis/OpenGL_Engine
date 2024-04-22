@@ -31,15 +31,16 @@ namespace AB
 		std::vector<unsigned int> indices;
 		std::vector<Texture> textures;
 
-		Mesh() = default;
+		Mesh() { VAO = VBO = EBO = 0; };
+		~Mesh();
 		Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices, std::vector<Texture> textures);
 
+		Texture& AddTexture(std::string typeName, const char* path, const std::string& directory);
+		void RefreshBuffers();
 		void Draw(Shader& shader, int drawMode = 0x0004);
 
 	private:
 
 		unsigned int VAO, VBO, EBO;
-
-		void SetupMesh();
 	};
 }

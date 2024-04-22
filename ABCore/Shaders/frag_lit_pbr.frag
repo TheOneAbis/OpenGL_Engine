@@ -9,31 +9,26 @@ const uint MAX_LIGHT_COUNT = 10u;
 
 struct Light
 {
-    uint Type;         // Which kind of light? 0, 1 or 2 (see above)
-    vec3 Direction;    // Directional and Spot lights need a direction
-    float Range;       // Point and Spot lights have a max range for attenuation
-    vec3 Position;     // Point and Spot lights have a position in space
-    float Intensity;   // All lights need an intensity
-    vec3 Color;        // All lights need a color
-    float SpotFalloff; // Spot lights need a value to define their “cone” size
+    uint Type;         // Light Type = 0, 1 or 2 (see above)
+    vec3 Direction;    // Direction for Directional and Spot lights
+    float Range;       // Attenuation for Point and Spot lights
+    vec3 Position;     // Position for Point and Spot lights
+    float Intensity;   // Light intensity
+    vec3 Color;        // Light color
+    float SpotFalloff; // Cone size for Spot Lights (unused)
 };
 
-// Basic lighting functions
+// Lambertian Diffuse
 float DiffuseBRDF(vec3 normal, vec3 dirToLight)
 {
     return clamp(dot(normal, dirToLight), 0, 1);
 }
 
+// Specular from Phong
 float SpecularBRDF(vec3 normal, vec3 lightDir, vec3 viewVector, float roughness, float roughScale)
 {
-	// Get reflection of light bouncing off the surface 
-    vec3 refl = reflect(lightDir, normal);
-    
     float specExponent = (1.0f - roughness) * MAX_SPECULAR_EXPONENT;
-
-	// Compare reflection against view vector, raising it to
-	// a very high power to ensure the falloff to zero is quick
-    return pow(clamp(dot(refl, viewVector), 0, 1), specExponent) * roughScale;
+    return pow(clamp(dot(reflect(lightDir, normal), viewVector), 0, 1), specExponent) * roughScale;
 }
 
 vec3 Phong(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 colorTint, vec3 viewVec, float roughness, float roughnessScale)
@@ -56,7 +51,7 @@ float Attenuate(Light light, vec3 worldPos)
 }
 
 // -------------------------------------------------------- \\
-// -- PHYSICALLY-BASED RENDERING FUNCTIONS AND CONSTANTS (Cook-Torrence) -- \\
+// --     PHYSICALLY-BASED RENDERING (Cook-Torrence)     -- \\
 // -------------------------------------------------------- \\
 
 // The fresnel value for non-metals (dielectrics)
@@ -65,7 +60,6 @@ const float MIN_ROUGHNESS = 0.0000001f;
 const float PI = 3.14159265359f;
 
 // Calculates diffuse amount based on energy conservation
-//
 // diffuse - Diffuse amount
 // F - Fresnel result from microfacet BRDF
 // metalness - surface metalness amount
@@ -158,11 +152,11 @@ vec3 MicrofacetBRDF(vec3 n, vec3 l, vec3 v, float roughness, vec3 f0, out vec3 F
 vec3 CookTorrence(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor,
     vec3 viewVec, float lightIntensity, float roughness, float metalness, vec3 specColor)
 {
-    // Diffuse is unchanged from non-PBR
+    // Diffuse is still just N dot L
     float diffuse = DiffuseBRDF(normal, -lightDir);
     
-    vec3 fresnel;
     // Get specular color and fresnel result
+    vec3 fresnel;
     vec3 spec = MicrofacetBRDF(normal, -lightDir, viewVec, roughness, specColor, fresnel);
     
     // Calculate diffuse with energy conservation, including cutting diffuse for metals
@@ -173,7 +167,10 @@ vec3 CookTorrence(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor
 }
 
 // Texture samplers
-
+uniform sampler2D texture_diffuse[1];
+uniform sampler2D texture_specular[1];
+uniform sampler2D texture_normal[1];
+uniform uint normalTextures;
 
 // INPUTS, UNIFORM, OUTPUTS
 in vec3 worldPos;
@@ -196,9 +193,12 @@ void main()
     vec3 newNormal = normalize(normal);
     vec3 viewVector = normalize(cameraPosition - worldPos);
 
-    vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), albedoColor.rgb, metallic);
+    // Get the actual base color from albedo and any textures
+    vec3 baseColor = albedoColor * texture(texture_diffuse[0], texCoord).xyz;
 
-    vec3 totalLightColor = ambient * albedoColor * (1 - metallic);
+    vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), baseColor, metallic);
+
+    vec3 totalLightColor = ambient * baseColor * (1 - metallic);
     totalLightColor += emissive.xxx;
 
     // Loop through the lights
@@ -220,7 +220,7 @@ void main()
                 attenuate = true;
                 break;
         }
-        vec3 lightCol = CookTorrence(newNormal, lightDir, lights[i].Color, albedoColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
+        vec3 lightCol = CookTorrence(newNormal, lightDir, lights[i].Color, baseColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
 
         // If this is a point or spot light, attenuate the color
         if (attenuate)

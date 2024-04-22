@@ -47,41 +47,6 @@ GameObject* Scene::Find(std::string objName)
 	return nullptr;
 }
 
-void Scene::CreateTree(int maxDepth)
-{
-	// gather all vertices and indices in the scene
-	vector<Vertex> allVerts;
-	vector<unsigned int> allIndices;
-	for (auto& obj : gameobjects)
-	{
-		for (auto& mesh : obj.GetMeshes())
-		{
-			allVerts.insert(allVerts.end(), mesh.vertices.begin(), mesh.vertices.end());
-			allIndices.insert(allIndices.end(), mesh.indices.begin(), mesh.indices.end());
-		}
-	}
-	
-	// create the tree with the verts
-	glm::vec3 min = glm::vec3(-FLT_MAX), max = glm::vec3(FLT_MAX);
-	for (auto& v : allVerts)
-	{
-		if (v.Position.x < min.x)
-			min.x = v.Position.x;
-		if (v.Position.y < min.y)
-			min.y = v.Position.y;
-		if (v.Position.z < min.z)
-			min.z = v.Position.z;
-
-		if (v.Position.x > max.x)
-			max.x = v.Position.x;
-		if (v.Position.y > max.y)
-			max.y = v.Position.y;
-		if (v.Position.z > max.z)
-			max.z = v.Position.z;
-	}
-	root = CreateNode(&allVerts, allIndices, 0, maxDepth, min, max);
-}
-
 KDNode* CreateNode(vector<Vertex>* allVerts, vector<unsigned int> indices, int depth, int maxDepth, glm::vec3 min, glm::vec3 max)
 {
 	if (depth > maxDepth || indices.empty()) return nullptr;
@@ -128,5 +93,47 @@ KDNode* CreateNode(vector<Vertex>* allVerts, vector<unsigned int> indices, int d
 
 	newNode->left = CreateNode(allVerts, leftIndices, depth + 1, maxDepth, leftMin, leftMax);
 	newNode->right = CreateNode(allVerts, rightIndices, depth + 1, maxDepth, rightMin, rightMax);
+}
 
+void Scene::Render(Shader& shader)
+{
+	for (auto& obj : gameobjects)
+	{
+		obj.Draw(shader);
+	}
+}
+
+void Scene::CreateTree(int maxDepth)
+{
+	// gather all vertices and indices in the scene
+	vector<Vertex> allVerts;
+	vector<unsigned int> allIndices;
+	for (auto& obj : gameobjects)
+	{
+		for (auto& mesh : obj.GetMeshes())
+		{
+			allVerts.insert(allVerts.end(), mesh.vertices.begin(), mesh.vertices.end());
+			allIndices.insert(allIndices.end(), mesh.indices.begin(), mesh.indices.end());
+		}
+	}
+	
+	// create the tree with the verts
+	glm::vec3 min = glm::vec3(-FLT_MAX), max = glm::vec3(FLT_MAX);
+	for (auto& v : allVerts)
+	{
+		if (v.Position.x < min.x)
+			min.x = v.Position.x;
+		if (v.Position.y < min.y)
+			min.y = v.Position.y;
+		if (v.Position.z < min.z)
+			min.z = v.Position.z;
+
+		if (v.Position.x > max.x)
+			max.x = v.Position.x;
+		if (v.Position.y > max.y)
+			max.y = v.Position.y;
+		if (v.Position.z > max.z)
+			max.z = v.Position.z;
+	}
+	root = CreateNode(&allVerts, allIndices, 0, maxDepth, min, max);
 }
