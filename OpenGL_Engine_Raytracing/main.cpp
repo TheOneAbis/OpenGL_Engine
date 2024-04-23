@@ -4,6 +4,8 @@
 
 // GLM math library
 #define GLM_FORCE_RADIANS
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -222,7 +224,7 @@ void display(void)
     shader.SetInt("indexCount", indexCount);
     shader.SetVector3("ambient", glm::vec3(0.1f, 0.1f, 0.1f));
     shader.SetVector3("screenColor", glm::vec3(0.25f, 0.61f, 1.f));
-    shader.SetInt("recursionDepth", 2);
+    shader.SetInt("recursionDepth", 6);
     
     // Lighting uniform data
     for (unsigned int i = 0; i < lights.size(); i++)

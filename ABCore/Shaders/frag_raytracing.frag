@@ -334,7 +334,7 @@ void main()
                 {
                     stack[count + 1].kr = stack[count].kr;
                     stack[count + 1].kt = stack[count].kt;
-                    stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal * (stack[count].hit.front ? 1.f : -1.f), stack[count].N);
+                    stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count].N);
                     stack[count + 1].origin = stack[count].hit.position;
                     count++;
                 }
