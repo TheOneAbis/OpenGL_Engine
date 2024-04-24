@@ -144,6 +144,7 @@
   <ItemGroup>
     <None Include="..\ABCore\Shaders\frag_checkerboard.frag" />
     <None Include="..\ABCore\Shaders\frag_raytracing.frag" />
+    <None Include="..\ABCore\Shaders\frag_TR.frag" />
     <None Include="..\ABCore\Shaders\vert_screen.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

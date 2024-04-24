@@ -25,7 +25,6 @@ struct RaycastHit
     vec3 normal;
     vec4 texcoord;
     int object;
-    bool front;
 
     float transmissive;
     float reflectance;
@@ -132,6 +131,7 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
     mat4 hitWorld;
     ivec3 hitTriIndices;
     int object;
+    bool front, thisfront;
 
     // loop through all tri's (every 3 indices)
     for (int i = 0; i < indexCount; i += 3)
@@ -149,9 +149,10 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
         vec3 p1w = vec3(world * vec4(texelFetch(vertData, triIndices.y * 4).xyz, 1));
         vec3 p2w = vec3(world * vec4(texelFetch(vertData, triIndices.z * 4).xyz, 1));
 
-        vec3 uvw = GetBaryCoords(origin, dir, p0w, p1w, p2w, hit.front);
+        vec3 uvw = GetBaryCoords(origin, dir, p0w, p1w, p2w, thisfront);
         if (uvw.z > EPSILON && uvw.z < resultUVW.z)
         {
+            front = thisfront;
             resultUVW = uvw;
             hitWorld = world;
             hitTriIndices = triIndices;
@@ -178,7 +179,7 @@ bool Raycast(vec3 origin, vec3 dir, out RaycastHit hit)
         vec4 t2 = texelFetch(vertData, hitTriIndices.z * 4 + 2);
 
         hit.position = (1 - resultUVW.x - resultUVW.y) * finalp0w + resultUVW.x * finalp1w + resultUVW.y * finalp2w;
-        hit.normal = normalize((1 - resultUVW.x - resultUVW.y) * n0 + resultUVW.x * n1 + resultUVW.y * n2);
+        hit.normal = normalize((1 - resultUVW.x - resultUVW.y) * n0 + resultUVW.x * n1 + resultUVW.y * n2) * (front ? 1 : -1);
         hit.texcoord = (1 - resultUVW.x - resultUVW.y) * t0 + resultUVW.x * t1 + resultUVW.y * t2;
         hit.object = object;
         hit.transmissive = n.w;
@@ -261,8 +262,6 @@ struct StackStruct
     vec3 lightColor;
     vec3 origin;
     vec3 dir;
-    float kr;
-    float kt;
     float N;
     RaycastHit hit;
     int stackState;
@@ -273,8 +272,8 @@ void main()
     // set up initial values
     StackStruct[10] stack;
     stack[0].lightColor = vec3(0, 0, 0);
-    stack[0].kr = 1.f;
-    stack[0].kt = 1.f;
+    stack[0].hit.reflectance = 1;
+    stack[0].hit.transmissive = 1;
     stack[0].N = 1.f;
     stack[0].origin = cameraPos;
     stack[0].dir = normalize(vec3(inverse(view) * vec4(normalize(vec3(screenPos.x * cameraFOV * aspectRatio, screenPos.y * cameraFOV, -1.f)), 1)) - cameraPos);
@@ -303,16 +302,12 @@ void main()
 
                     // local illumination
                     stack[count].lightColor = LocalIlluminate(stack[count].origin, stack[count].hit);
-                    stack[count].kr *= stack[count].hit.reflectance;
-                    stack[count].kt *= stack[count].hit.transmissive;
                     stack[count].N = stack[count - 1].hit.refraction / stack[count].hit.refraction;
 
                     // reflection ray
-                    if (stack[count].kr > EPSILON)
+                    if (stack[count].hit.reflectance > EPSILON)
                     {
                         // set the next frame's data (similar to passing in new params for recursive call)
-                        stack[count + 1].kr = stack[count].kr;
-                        stack[count + 1].kt = stack[count].kt;
                         stack[count + 1].dir = reflect(stack[count].dir, stack[count].hit.normal);
                         stack[count + 1].origin = stack[count].hit.position;
                         count++;
@@ -330,19 +325,18 @@ void main()
                 stack[count].stackState = 2;
 
                 // transmission ray
-                if (stack[count].kt > EPSILON)
+                if (stack[count].hit.transmissive > EPSILON)
                 {
-                    stack[count + 1].kr = stack[count].kr;
-                    stack[count + 1].kt = stack[count].kt;
-                    stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count].N);
+                    stack[count + 1].dir = refract(stack[count].dir, stack[count].hit.normal, stack[count - 1].N);
                     stack[count + 1].origin = stack[count].hit.position;
                     count++;
                 }
                 break;
 
             case 2: // "return" the final color
-                stack[count].lightColor *= stack[count - 1].stackState == 1 ? stack[count - 1].kr : stack[count - 1].kt;
-                stack[count - 1].lightColor += stack[count].lightColor;
+                stack[count - 1].lightColor += stack[count].lightColor * 
+                    (stack[count - 1].stackState == 1 ? stack[count - 1].hit.reflectance : 
+                    stack[count - 1].hit.transmissive);
                 count--;
                 break;
         }

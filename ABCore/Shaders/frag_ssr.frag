@@ -18,7 +18,7 @@ out vec4 fragColor;
 void main()
 {
     // get texture dimensions and the coord of this pixel
-    vec2 texSize = textureSize(viewTexture, 0).xy;
+    vec2 texSize = textureSize(positionTexture, 0).xy;
     vec2 texCoord = gl_FragCoord.xy / texSize;
 
     vec4 worldPos = texture(positionTexture, texCoord);

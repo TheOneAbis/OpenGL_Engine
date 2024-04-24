@@ -16,12 +16,12 @@
 
 #include <iostream>
 #include <ABCore/Scene.h>
-#include <ABCore/Input.h>
 
 using namespace std;
 using namespace AB;
 
 // the window's width and height
+GLFWwindow* window;
 int width = 1280, height = 720;
 
 struct Light
@@ -43,48 +43,49 @@ enum LightType : int
 };
 
 vector<Light> lights;
-Shader shader;
+Shader trShader;
 Mesh tri;
-GameObject* smallSphere, * bigSphere, * cone, * mFloor;
+unsigned int viewportTex;
+glm::vec4* colorData;
 
 Transform camTM;
-glm::vec2 camEulers;
-float dt, oldT;
 
-unsigned int vertBuffer, indexBuffer, worldMatrices;
-unsigned int vertTex, indexTex, worldMatricesTex;
-int indexCount = 0;
+float aspect = (float)width / (float)height;
+float fov = glm::pi<float>() / 2.f;
+glm::vec3 ambient = glm::vec3(0.1f, 0.1f, 0.1f);
+glm::vec3 screenCol = glm::vec3(0.25f, 0.61f, 1.f);
+int recursionDepth = 4;
+
+GameObject* mFloor;
 
 void init()
 {
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
 
-    oldT = glfwGetTime();
-
-    // set up shader
-    shader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_raytracing.frag");
+    trShader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_TR.frag");
     tri = Mesh(
         {
             { glm::vec3(-1, 1, 0), glm::vec3(), glm::vec2() },
             { glm::vec3(-1, -3, 0), glm::vec3(), glm::vec2() },
             { glm::vec3(3, 1, 0), glm::vec3(), glm::vec2() }
-        }, 
-        {0, 1, 2}, {});
+        },
+        { 0, 1, 2 }, {});
+    colorData = new glm::vec4[width * height];
 
     // set up scene models
     // mirror sphere
-    smallSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
+    GameObject* smallSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
     smallSphere->SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
     smallSphere->GetMaterial().albedo = { 0.7f, 0.7f, 0.7f };
     smallSphere->GetMaterial().roughness = 0.f;
     smallSphere->GetMaterial().transmissive = 0.f;
     smallSphere->GetMaterial().reflectance = 0.75f;
     smallSphere->GetMaterial().diffuse = 0.25f;
-
+    
     // glass sphere
-    bigSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
-    bigSphere->SetWorldTM({ 0, 0.0f, -1.5f }, glm::quat(), {.75f, .75f, .75f});
+    GameObject* bigSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
+    bigSphere->SetWorldTM({ 0, 0, -1.5f }, glm::quat(), {.75f, .75f, .75f});
     bigSphere->GetMaterial().albedo = { 1, 1, 1 };
     bigSphere->GetMaterial().roughness = 0.8f;
     bigSphere->GetMaterial().metallic = 0.5f;
@@ -113,152 +114,165 @@ void init()
     dirLight.Intensity = 1.f;
     lights.push_back(dirLight);
 
-    // create the giant vertex buffer
-    vector<glm::vec4> vertData;
-    vector<unsigned int> indexData;
-    vector<glm::mat4> worldMatData;
+    // change all verts to world space
     for (auto& obj : Scene::Get().GetAllObjects())
     {
-        worldMatData.push_back(obj.GetWorldTM().GetMatrix());
-
+        glm::mat4 world = obj.GetWorldTM().GetMatrix();
         for (auto& mesh : obj.GetMeshes())
         {
-            for (auto& i : mesh.indices)
-            {
-                indexData.push_back(i + (vertData.size() / 4));
-            }
-            
             for (auto& vert : mesh.vertices)
             {
-                Material& m = obj.GetMaterial();
-                // store which world matrix this vert should use in the position's w coord
-                vertData.push_back(glm::vec4(vert.Position, (float)worldMatData.size() - 1.f));
-                vertData.push_back(glm::vec4(vert.Normal, m.transmissive));
-                vertData.push_back(glm::vec4(m.albedo, m.roughness));
-                vertData.push_back(glm::vec4(m.diffuse, m.reflectance, m.refraction, 0));
+                vert.Position = glm::vec3(world * glm::vec4(vert.Position, 1));
+                vert.Normal = glm::inverse(glm::transpose(glm::mat3(world))) * vert.Normal;
             }
         }
     }
-    
-    // generate the buffers
-    glGenBuffers(1, &vertBuffer);
-    glGenBuffers(1, &indexBuffer);
-    glGenBuffers(1, &worldMatrices);
 
-    glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec4) * vertData.size(), &vertData[0], GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, indexBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(unsigned int) * indexData.size(), &indexData[0], GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, worldMatrices);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * worldMatData.size(), &worldMatData[0], GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    // gen texture buffers and attach the above buffer objects to them
-    glGenTextures(1, &vertTex);
-    glGenTextures(1, &indexTex);
-    glGenTextures(1, &worldMatricesTex);
-
-    glBindTexture(GL_TEXTURE_BUFFER, vertTex);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, vertBuffer);
-    glBindTexture(GL_TEXTURE_BUFFER, indexTex);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_R32UI, indexBuffer);
-    glBindTexture(GL_TEXTURE_BUFFER, worldMatricesTex);
-    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, worldMatrices);
-    
-    glBindTexture(GL_TEXTURE_BUFFER, 0);
-
-    // set the sampler buffers
-    indexCount = indexData.size();
+    glGenTextures(1, &viewportTex);
 }
 
-void Tick()
+glm::vec3 GetFloorColor(glm::vec3 worldPos)
 {
-    float newT = glfwGetTime();
-    dt = newT - oldT;
-    oldT = newT;
+    glm::vec3 color = glm::vec3(1, 1, 0);
 
-    if (Input::Get().MouseButtonDown(2))
+    glm::ivec3 scaledPos = glm::abs(glm::ivec3(worldPos * 4.f) % 2);
+    glm::ivec2 scaledPosxz = { scaledPos.x, scaledPos.z };
+    if (scaledPosxz == glm::ivec2(0, 0) || scaledPosxz == glm::ivec2(1, 1))
+        color.y = 0;
+    if (worldPos.x < 0)
+        color.y = 1 - color.y;
+
+    return color;
+}
+
+glm::vec3 Phong(glm::vec3 normal, glm::vec3 lightDir, glm::vec3 lightColor, glm::vec3 colorTint, glm::vec3 viewVec, float specScale, float diffuseScale)
+{
+    // Calculate diffuse and specular values
+    float diffuse = glm::clamp(glm::dot(normal, -lightDir), 0.f, 1.f) * diffuseScale;
+    float spec = glm::pow(glm::clamp(glm::dot(glm::reflect(lightDir, normal), viewVec), 0.f, 1.f), 20.f) * specScale;
+
+    // Cut the specular if the diffuse contribution is zero
+    spec *= diffuse < 0.001f ? 0.f : 1.f;
+
+    return lightColor * colorTint * (diffuse + spec);
+}
+
+glm::vec3 LocalIlluminate(glm::vec3 origin, RaycastHit hit)
+{
+    Material& m = hit.gameObject->GetMaterial();
+
+    glm::vec3 baseColor = hit.gameObject == mFloor ? GetFloorColor(hit.position) : m.albedo;
+    float spec = 1 - glm::clamp(m.roughness, 0.f, 0.99f);
+    glm::vec3 viewVector = glm::normalize(origin - hit.position);
+
+    // Calculate lighting at the hit
+    glm::vec3 hitColor = ambient * baseColor;
+
+    // Loop through the lights
+    for (Light& l : lights)
     {
-        camEulers += Input::Get().GetMouseDelta();
-        camTM.SetRotationEulersZYX(glm::vec3(camEulers.y * 0.0025f, camEulers.x * 0.0025f, 0.f));
+        glm::vec3 lightDir = l.Type == LIGHT_TYPE_DIRECTIONAL ? l.Direction * 500.f : hit.position - l.Position;
+        bool attenuate = l.Type != LIGHT_TYPE_DIRECTIONAL;
+
+        // shadow ray for each light; do lighting if no hit
+        if (!Scene::Get().Raycast(hit.position, -lightDir, glm::length(lightDir)))
+        {
+            lightDir = glm::normalize(lightDir);
+            glm::vec3 lightCol = Phong(hit.normal, lightDir, l.Color, baseColor, viewVector, spec, m.diffuse) * l.Intensity;
+
+            // attenuate the light if not directional
+            if (attenuate)
+            {
+                float dist = glm::distance(l.Position, hit.position);
+                lightCol *= glm::pow(glm::clamp(1.f - (dist * dist / (l.Range * l.Range)), 0.f, 1.f), 2.f);
+            }
+            hitColor += lightCol;
+        }
     }
+    return hitColor;
+}
 
-    glm::vec3 camVel = {};
-    if (Input::Get().KeyDown(GLFW_KEY_W))
-        camVel.z = -1.f;
-    if (Input::Get().KeyDown(GLFW_KEY_A))
-        camVel.x = -1.f;
-    if (Input::Get().KeyDown(GLFW_KEY_S))
-        camVel.z = 1.f;
-    if (Input::Get().KeyDown(GLFW_KEY_D))
-        camVel.x = 1.f;
-    if (Input::Get().KeyDown(GLFW_KEY_Q))
-        camVel.y = -1.f;
-    if (Input::Get().KeyDown(GLFW_KEY_E))
-        camVel.y = 1.f;
+glm::vec3 Raytrace(glm::vec3 origin, glm::vec3 dir, int depth, float incomingRefr)
+{
+    if (depth > recursionDepth)
+        return glm::vec3(0, 0, 0);
+    
+    RaycastHit hit;
+    if (Scene::Get().Raycast(origin, dir, hit))
+    {
+        // Local illumination and shadow casting
+        glm::vec3 lightColor = LocalIlluminate(origin, hit);
 
-    glm::vec3 t = glm::normalize(camVel);
-    if (!isnan(t.x))
-        camTM.Translate(t * camTM.GetRotation() * dt * 3.f);
+        // reflection
+        float kr = hit.gameObject->GetMaterial().reflectance;
+        if (kr > 0.001f)
+        {
+            lightColor += kr * Raytrace(hit.position, glm::reflect(dir, hit.normal), depth + 1, hit.gameObject->GetMaterial().refraction);
+        }
 
-    Input::Get().Update();
+        // refraction
+        float kt = hit.gameObject->GetMaterial().transmissive;
+        if (kt > 0.001f)
+        {
+            float refr = hit.gameObject->GetMaterial().refraction;
+            lightColor += kt * Raytrace(hit.position, glm::refract(dir, hit.normal, incomingRefr / refr), depth + 1, refr);
+        }
+
+        return lightColor;
+    }
+    else
+    {
+        return screenCol;
+    }
 }
 
 // called when the GL context need to be rendered
 void display(void)
 {
-    // clear the screen to white, which is the background color
-    glClearColor(0.1f, 0.1f, 0.1f, 0.f);
-
-    // clear the buffer stored for drawing
+    glClearColor(0.25f, 0.61f, 1.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    // use the shader program
-    shader.use();
+    glm::mat4 invView = glm::inverse(glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
+    glm::vec3 avgIntensity = {};
 
-    shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
-    shader.SetFloat("aspectRatio", (float)width / (float)height);
-    shader.SetFloat("cameraFOV", glm::pi<float>() / 2.f);
-    shader.SetVector3("cameraPos", camTM.GetTranslation());
-    shader.SetInt("indexCount", indexCount);
-    shader.SetVector3("ambient", glm::vec3(0.1f, 0.1f, 0.1f));
-    shader.SetVector3("screenColor", glm::vec3(0.25f, 0.61f, 1.f));
-    shader.SetInt("recursionDepth", 6);
-    
-    // Lighting uniform data
-    for (unsigned int i = 0; i < lights.size(); i++)
+    for (int y = 0; y < height; y++)
     {
-        shader.SetUint("lights[" + to_string(i) + "].Type", lights[i].Type);
-        shader.SetVector3("lights[" + to_string(i) + "].Direction", lights[i].Direction);
-        shader.SetFloat("lights[" + to_string(i) + "].Range", lights[i].Range);
-        shader.SetVector3("lights[" + to_string(i) + "].Position", lights[i].Position);
-        shader.SetFloat("lights[" + to_string(i) + "].Intensity", lights[i].Intensity);
-        shader.SetVector3("lights[" + to_string(i) + "].Color", lights[i].Color);
-        shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
+        for (int x = 0; x < width; x++)
+        {
+            // convert [0,1] range to [-1, 1]
+            /*float xPercent = (float)x / ((float)width * 2.f - 1.f);
+            float yPercent = (float)y / ((float)width * 2.f - 1.f);
+            glm::vec4 viewSpaceDir = glm::vec4(glm::normalize(glm::vec3(xPercent * fov * aspect, yPercent * fov, -1.f)), 1.f);
+            glm::vec3 dir = glm::normalize(glm::vec3(invView * viewSpaceDir) - camTM.GetTranslation());
+
+            glm::vec4 result = glm::vec4(Raytrace(camTM.GetTranslation(), dir, 0, 1), 1);*/
+
+            glm::vec4 result = { 0, 1, 1, 1};
+
+            colorData[y * width + x] = result;
+            avgIntensity += glm::vec3(result);
+        }
     }
-
-    // bind the texture buffers to their respective texture units as defined in the frag shader
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_BUFFER, vertTex);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_BUFFER, indexTex);
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_BUFFER, worldMatricesTex);
+    
+    glBindTexture(GL_TEXTURE_2D, viewportTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_FLOAT, colorData);
 
     glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, viewportTex);
 
-    tri.Draw(shader);
+    avgIntensity /= (float)(width * height);
+
+    trShader.use();
+    trShader.SetVector3("avgIntensity", avgIntensity);
+    
+    tri.Draw(trShader);
 }
 
 // called when window is first created or when window is resized
 void reshape(GLFWwindow* window, int w, int h)
 {
-    // update thescreen dimensions
     width = w;
     height = h;
 
-    /* tell OpenGL to use the whole window for drawing */
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
 }
 
@@ -276,7 +290,7 @@ int main(int argc, char* argv[])
 
     // initialize GLEW
     glewExperimental = GL_TRUE;
-    GLFWwindow* window = glfwCreateWindow(width, height, "Ray Tracer", NULL, NULL);
+    window = glfwCreateWindow(width, height, "Ray Tracer", NULL, NULL);
     if (window == NULL)
     {
         cout << "Failed to create GLFW window" << endl;
@@ -296,10 +310,8 @@ int main(int argc, char* argv[])
 
     // initialize everything else
     init();
-    Input::Get().Init(window);
 
     // Main Loop
-    Tick();
     display();
     glfwSwapBuffers(window);
     while (!glfwWindowShouldClose(window))

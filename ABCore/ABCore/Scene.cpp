@@ -1,5 +1,7 @@
 #include "Scene.h"
 
+#define EPSILON 0.0001f
+
 using namespace AB;
 using namespace std;
 
@@ -45,6 +47,115 @@ GameObject* Scene::Find(std::string objName)
 			return &obj;
 	}
 	return nullptr;
+}
+
+glm::vec3 GetBaryCoords(glm::vec3 origin, glm::vec3 dir, glm::vec3 p0, glm::vec3 p1, glm::vec3 p2, bool& front)
+{
+	glm::vec3 uvw = glm::vec3(-1, -1, -1);
+
+	// get tri edges sharing p0
+	glm::vec3 e1 = p1 - p0;
+	glm::vec3 e2 = p2 - p0;
+
+	glm::vec3 p = glm::cross(dir, e2);
+	float det = glm::dot(e1, p);
+
+	// if determinant is near 0, ray lies in tri plane.
+	front = det > 0;
+	if (abs(det) < EPSILON)
+		return uvw;
+
+	float f = (1.f / det);
+	glm::vec3 toOrigin = origin - p0;
+	// calculate U and test if it's within tri bounds
+	uvw.x = f * glm::dot(toOrigin, p);
+	if (uvw.x < 0.f || uvw.x > 1.f)
+		return uvw;
+
+	// calculate V and test if coord is within tri bounds
+	glm::vec3 q = glm::cross(toOrigin, e1);
+	uvw.y = f * glm::dot(dir, q);
+	if (uvw.y < 0.f || uvw.x + uvw.y > 1.f)
+		return uvw;
+
+	// calculate distance
+	uvw.z = f * glm::dot(e2, q);
+	return uvw;
+}
+
+// Casts a ray and returns the barycentric coords of the hit on the tri being tested against.
+// Returns false if no hit
+bool Scene::Raycast(glm::vec3 origin, glm::vec3 dir, RaycastHit& hit)
+{
+	bool successful = false;
+	glm::vec3 resultUVW{ -1, -1, 999999.f};
+	Vertex hitTri[3];
+
+	// loop through all tri's in scene (every 3 indices)
+	for (GameObject& obj : gameobjects)
+	{
+		for (Mesh& m : obj.GetMeshes())
+		{
+			for (int i = 0; i < m.indices.size(); i++)
+			{
+				// Get the first vert in this tri to get the world matrix
+				Vertex p0 = m.vertices[m.indices[i]];
+				Vertex p1 = m.vertices[m.indices[i]];
+				Vertex p2 = m.vertices[m.indices[i]];
+
+				bool thisfront = true;
+				glm::vec3 uvw = GetBaryCoords(origin, dir, p0.Position, p1.Position, p2.Position, thisfront);
+				if (uvw.z > EPSILON && uvw.z < resultUVW.z)
+				{
+					resultUVW = uvw;
+					hitTri[0] = p0;
+					hitTri[1] = p1;
+					hitTri[2] = p2;
+
+					hit.front = thisfront;
+					hit.gameObject = &obj;
+					successful = true;
+				}
+			}
+		}
+	}
+
+	// If found the barycentric coords of the tri hit, 
+	// interpolate to find position, normal, and texcoords
+	if (successful)
+	{
+		hit.position = (1 - resultUVW.x - resultUVW.y) * hitTri[0].Position + resultUVW.x * hitTri[1].Position + resultUVW.y * hitTri[2].Position;
+		hit.normal = glm::normalize((1 - resultUVW.x - resultUVW.y) * hitTri[0].Normal + resultUVW.x * hitTri[1].Normal + resultUVW.y * hitTri[2].Normal) * (hit.front ? 1.f : -1.f);
+		hit.texcoord = (1 - resultUVW.x - resultUVW.y) * hitTri[0].TexCoord + resultUVW.x * hitTri[1].TexCoord + resultUVW.y * hitTri[2].TexCoord;
+	}
+
+	return successful;
+}
+
+bool Scene::Raycast(glm::vec3 origin, glm::vec3 dir, float maxDistance)
+{
+	// loop through all tri's in scene (every 3 indices)
+	for (GameObject& obj : gameobjects)
+	{
+		glm::mat4 world = obj.GetWorldTM().GetMatrix();
+
+		for (Mesh& m : obj.GetMeshes())
+		{
+			for (int i = 0; i < m.indices.size(); i++)
+			{
+				// Get the first vert in this tri to get the world matrix
+				Vertex p0 = m.vertices[m.indices[i]];
+				Vertex p1 = m.vertices[m.indices[i]];
+				Vertex p2 = m.vertices[m.indices[i]];
+
+				bool junk;
+				glm::vec3 uvw = GetBaryCoords(origin, dir, p0.Position, p1.Position, p2.Position, junk);
+				if (uvw.z > EPSILON && uvw.z < maxDistance)
+					return true;
+			}
+		}
+	}
+	return false;
 }
 
 void Scene::Render(Shader& shader)
