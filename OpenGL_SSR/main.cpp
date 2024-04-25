@@ -43,7 +43,10 @@ enum LightType : int
 };
 
 vector<Light> lights;
-Shader shader;
+Shader shader, ssrShader;
+Mesh ssrTri;
+unsigned int framebuffer;
+unsigned int colorTex, posTex, normalTex;
 
 Transform camTM;
 glm::vec2 camEulers;
@@ -61,6 +64,7 @@ void init()
 
     // set up shader
     shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
+    ssrShader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_ssr.frag");
 
     // set up scene models
     Scene& scene = Scene::Get();
@@ -84,17 +88,6 @@ void init()
     for (Mesh& m : oakTree->GetMeshes())
         m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
-    // WALLS
-    vector<Mesh> plane = { Mesh(
-        {
-            { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
-            { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(20.f, 0.f) },
-            { glm::vec3(1.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(20.f, 20.f) },
-            { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 20.f) }
-        },
-        { 0, 1, 2, 0, 2, 3 },
-        vector<Texture>()) };
-
     vector<int> indices = { 0, 1, 2, 0, 2, 3 };
     GameObject* ground = scene.Add(GameObject("../Assets/Terrain.fbx", "Ground"));
     ground->SetWorldTM(Transform({ 400, -30, -425 }, glm::quat(), { 0.1, 0.1, 0.1 }));
@@ -116,6 +109,48 @@ void init()
     sun.Intensity = 0.5f;
     sun.Direction = {1, -1, 0.5f};
     lights.push_back(sun);
+
+    ssrTri = Mesh(
+        {
+            { glm::vec3(-1, 1, 0), glm::vec3(), glm::vec2() },
+            { glm::vec3(-1, -3, 0), glm::vec3(), glm::vec2() },
+            { glm::vec3(3, 1, 0), glm::vec3(), glm::vec2() }
+        },
+        { 0, 1, 2 }, {});
+
+    // Create framebuffers and textures to render to
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    // generate textures for rendering to
+    glGenTextures(1, &colorTex);
+    glBindTexture(GL_TEXTURE_2D, colorTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    glGenTextures(1, &normalTex);
+    glBindTexture(GL_TEXTURE_2D, normalTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    glGenTextures(1, &posTex);
+    glBindTexture(GL_TEXTURE_2D, posTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    // configure framebuffer with these textures
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, colorTex, 0);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, normalTex, 0);
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, posTex, 0);
+
+    unsigned int DrawBuffers[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+    glDrawBuffers(3, DrawBuffers);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        cout << "ERROR: Framebuffer shat itself!" << endl;
 }
 
 void Tick()
@@ -163,7 +198,7 @@ void display()
     // clear the buffer stored for drawing
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // use the shader program
+    // use normal shader to render colors, normals and positions to textures
     shader.use();
 
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
@@ -183,9 +218,18 @@ void display()
         shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
     }
 
+    // render to the framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glViewport(0, 0, width, height);
+
     Scene::Get().Render(shader);
 
-    // TODO: add SSR shader stuff here
+    // use SSR shader to use newly rendered textures from above for the final result
+    ssrShader.use();
+
+    // render to the screen
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    ssrTri.Draw(ssrShader);
 }
 
 // called when window is first created or when window is resized

@@ -185,17 +185,16 @@ uniform vec3 ambient;
 uniform vec3 cameraPosition;
 uniform Light[MAX_LIGHT_COUNT] lights;
 
-out vec4 fragColor;
-out vec4 fragNormal;
-out vec4 fragWorldPos;
+layout (location = 0) out vec3 fragColor;
+layout (location = 1) out vec3 fragNormal;
+layout (location = 2) out vec3 fragWorldPos;
 
 void main()
 {
-    vec3 newNormal = normalize(normal);
-    fragNormal = vec4(newNormal, 1);
+    fragNormal = normalize(normal);
 
     vec3 viewVector = normalize(cameraPosition - worldPos);
-    fragWorldPos = vec4(worldPos, 1);
+    fragWorldPos = worldPos;
 
     // Get the actual base color from albedo and any textures
     vec3 baseColor = albedoColor * texture(texture_diffuse[0], texCoord).xyz;
@@ -224,7 +223,7 @@ void main()
                 attenuate = true;
                 break;
         }
-        vec3 lightCol = CookTorrence(newNormal, lightDir, lights[i].Color, baseColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
+        vec3 lightCol = CookTorrence(fragNormal, lightDir, lights[i].Color, baseColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
 
         // If this is a point or spot light, attenuate the color
         if (attenuate)
@@ -233,8 +232,6 @@ void main()
         totalLightColor += lightCol;
     }
     
-    // correct color w/ gamma and return final color
-    fragColor = vec4(pow(totalLightColor.x, 1.0f / 2.2f),
-                     pow(totalLightColor.y, 1.0f / 2.2f),
-                     pow(totalLightColor.z, 1.0f / 2.2f), 1);
+    // return final color
+    fragColor = totalLightColor;
 }
