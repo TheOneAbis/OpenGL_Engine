@@ -22,6 +22,12 @@ namespace AB
 		std::string path;
 	};
 
+	enum MeshType
+	{
+		MESH_SPHERE,
+		MESH_TRI
+	};
+
 	class Mesh
 	{
 	public:
@@ -34,10 +40,14 @@ namespace AB
 		Mesh() { VAO = VBO = EBO = 0; };
 		~Mesh();
 		Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices, std::vector<Texture> textures);
+		Mesh(float radius);
 
 		Texture& AddTexture(std::string typeName, const char* path, const std::string& directory);
 		void RefreshBuffers();
 		void Draw(Shader& shader, int drawMode = 0x0004);
+
+		MeshType type = MESH_SPHERE;
+		float radius;
 
 	private:
 

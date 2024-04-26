@@ -26,9 +26,6 @@
     <None Include="..\ABCore\Shaders\vert_screen.vert">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="..\ABCore\Shaders\frag_checkerboard.frag">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="..\ABCore\Shaders\frag_TR.frag">
       <Filter>Resource Files</Filter>
     </None>

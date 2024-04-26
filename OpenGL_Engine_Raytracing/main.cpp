@@ -17,12 +17,14 @@
 #include <iostream>
 #include <ABCore/Scene.h>
 
+#include <thread>
+
 using namespace std;
 using namespace AB;
 
 // the window's width and height
 GLFWwindow* window;
-int width = 1280, height = 720;
+int width = 800, height = 600;
 
 struct Light
 {
@@ -46,7 +48,8 @@ vector<Light> lights;
 Shader trShader;
 Mesh tri;
 unsigned int viewportTex;
-glm::vec4* colorData;
+glm::vec3* colorData;
+vector<thread> threads;
 
 Transform camTM;
 
@@ -71,7 +74,7 @@ void init()
             { glm::vec3(3, 1, 0), glm::vec3(), glm::vec2() }
         },
         { 0, 1, 2 }, {});
-    colorData = new glm::vec4[width * height];
+    colorData = new glm::vec3[width * height];
 
     // set up scene models
     // mirror sphere
@@ -82,13 +85,13 @@ void init()
     smallSphere->GetMaterial().transmissive = 0.f;
     smallSphere->GetMaterial().reflectance = 0.75f;
     smallSphere->GetMaterial().diffuse = 0.25f;
-    
+    //
     // glass sphere
     GameObject* bigSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
     bigSphere->SetWorldTM({ 0, 0, -1.5f }, glm::quat(), {.75f, .75f, .75f});
     bigSphere->GetMaterial().albedo = { 1, 1, 1 };
     bigSphere->GetMaterial().roughness = 0.8f;
-    bigSphere->GetMaterial().metallic = 0.5f;
+    //bigSphere->GetMaterial().metallic = 0.5f;
     bigSphere->GetMaterial().transmissive = 0.8f;
     bigSphere->GetMaterial().reflectance = 0.01f;
     bigSphere->GetMaterial().diffuse = 0.075f;
@@ -145,6 +148,77 @@ glm::vec3 GetFloorColor(glm::vec3 worldPos)
     return color;
 }
 
+//  -- Cook-Torrence PBR BRDF functions -- \\
+=============================================
+
+// Fresnel value for non-metals
+const float NONMETAL_F0 = 0.04f;
+const float MIN_ROUGHNESS = 0.0000001f;
+
+// Normal Distribution
+float D_GGX(glm::vec3 n, glm::vec3 h, float roughness)
+{
+    float NdotH = glm::clamp(glm::dot(n, h), 0.f, 1.f);
+    float NdotH2 = NdotH * NdotH;
+    float a = roughness * roughness;
+    float a2 = glm::max(a * a, MIN_ROUGHNESS);
+
+    // ((n dot h)^2 * (a^2 - 1) + 1)
+    float denomToSquare = NdotH2 * (a2 - 1) + 1;
+
+    return a2 / (glm::pi<float>() * denomToSquare * denomToSquare);
+}
+
+// Fresnel term
+glm::vec3 Fresnel(glm::vec3 v, glm::vec3 h, glm::vec3 f0)
+{
+    float VdotH = glm::clamp(glm::dot(v, h), 0.f, 1.f);
+    return f0 + (1.f - f0) * glm::pow(1.f - VdotH, 5.f);
+}
+
+// Geometric Shadowing
+float G_SchlickGGX(glm::vec3 n, glm::vec3 v, float roughness)
+{
+    float k = glm::pow(roughness + 1.f, 2.f) / 8.0f;
+    float NdotV = glm::clamp(glm::dot(n, v), 0.f, 1.f);
+
+    return 1 / (NdotV * (1 - k) + k);
+}
+
+// Cook-Torrance
+// f(l,v) = D(h)F(v,h)G(l,v,h) / 4(n dot l)(n dot v)
+glm::vec3 Microfacet(glm::vec3 n, glm::vec3 l, glm::vec3 v, float roughness, glm::vec3 f0, glm::vec3& F)
+{
+    glm::vec3 h = glm::normalize(v + l);
+
+    // Run numerator functions
+    float D = D_GGX(n, h, roughness);
+    F = Fresnel(v, h, f0);
+    float G = G_SchlickGGX(n, v, roughness) * G_SchlickGGX(n, l, roughness);
+
+    glm::vec3 specularResult = (D * F * G) / 4.f;
+    return specularResult * glm::max(glm::dot(n, l), 0.f);
+}
+
+glm::vec3 CookTorrence(glm::vec3 normal, glm::vec3 lightDir, glm::vec3 lightColor, glm::vec3 surfaceColor,
+    glm::vec3 viewVec, float lightIntensity, float roughness, float metalness, glm::vec3 specColor)
+{
+    // Diffuse is still just N dot L
+    float diffuse = glm::clamp(glm::dot(normal, -lightDir), 0.f, 1.f);
+
+    // Get specular color and fresnel result
+    glm::vec3 fresnel;
+    glm::vec3 spec = Microfacet(normal, -lightDir, viewVec, roughness, specColor, fresnel);
+
+    // Diffuse w/ energy conservation (also accounting for metals)
+    glm::vec3 balancedDiff = diffuse * (1.f - fresnel) * (1.f - metalness);
+
+    return (balancedDiff * surfaceColor + spec) * lightIntensity * lightColor;
+}
+
+//  -- Goofy basic Phong BRDF function -- \\
+=============================================
+
 glm::vec3 Phong(glm::vec3 normal, glm::vec3 lightDir, glm::vec3 lightColor, glm::vec3 colorTint, glm::vec3 viewVec, float specScale, float diffuseScale)
 {
     // Calculate diffuse and specular values
@@ -162,11 +236,13 @@ glm::vec3 LocalIlluminate(glm::vec3 origin, RaycastHit hit)
     Material& m = hit.gameObject->GetMaterial();
 
     glm::vec3 baseColor = hit.gameObject == mFloor ? GetFloorColor(hit.position) : m.albedo;
+    //glm::vec3 specularColor = glm::mix(glm::vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), baseColor, m.metallic); // for cooktorrence
     float spec = 1 - glm::clamp(m.roughness, 0.f, 0.99f);
+
     glm::vec3 viewVector = glm::normalize(origin - hit.position);
 
-    // Calculate lighting at the hit
-    glm::vec3 hitColor = ambient * baseColor;
+    // Calculate lighting at the hit (metallic is for CookTorrence)
+    glm::vec3 hitColor = ambient * baseColor * (1 - m.metallic);
 
     // Loop through the lights
     for (Light& l : lights)
@@ -179,6 +255,7 @@ glm::vec3 LocalIlluminate(glm::vec3 origin, RaycastHit hit)
         {
             lightDir = glm::normalize(lightDir);
             glm::vec3 lightCol = Phong(hit.normal, lightDir, l.Color, baseColor, viewVector, spec, m.diffuse) * l.Intensity;
+            //glm::vec3 lightCol = CookTorrence(hit.normal, lightDir, l.Color, baseColor, viewVector, l.Intensity, m.roughness, m.metallic, specularColor);
 
             // attenuate the light if not directional
             if (attenuate)
@@ -226,45 +303,70 @@ glm::vec3 Raytrace(glm::vec3 origin, glm::vec3 dir, int depth, float incomingRef
     }
 }
 
+inline float ToLuminance(glm::vec3 color, float Lmax)
+{
+    color *= Lmax;
+    return 0.27f * color.r + 0.67f * color.g + 0.06f * color.b;
+}
+
+void CalculateRow(int y, float* rowNits, float Lmax, atomic<int>* counter)
+{
+    float totalNits = 0;
+    for (int x = 0; x < width; x++)
+    {
+        // convert [0,1] range to [-1, 1]
+        float xPercent = (float)x / (float)width * 2.f - 1.f;
+        float yPercent = (float)y / (float)width * 2.f - 1.f;
+        glm::vec3 dir = glm::normalize(glm::vec3(xPercent * fov * aspect, yPercent * fov, -1.f));
+
+        glm::vec3 result = Raytrace(camTM.GetTranslation(), dir, 0, 1);
+        colorData[y * width + x] = result;
+
+        // add log(l) to total
+        totalNits += glm::log(FLT_EPSILON + ToLuminance(result, Lmax));
+    }
+    *rowNits = totalNits;
+    counter->store(counter->load() + 1);
+}
+
 // called when the GL context need to be rendered
 void display(void)
 {
     glClearColor(0.25f, 0.61f, 1.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glm::mat4 invView = glm::inverse(glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
-    glm::vec3 avgIntensity = {};
+    float* rowNits = new float[height];
 
-    for (int y = 0; y < height; y++)
-    {
-        for (int x = 0; x < width; x++)
-        {
-            // convert [0,1] range to [-1, 1]
-            /*float xPercent = (float)x / ((float)width * 2.f - 1.f);
-            float yPercent = (float)y / ((float)width * 2.f - 1.f);
-            glm::vec4 viewSpaceDir = glm::vec4(glm::normalize(glm::vec3(xPercent * fov * aspect, yPercent * fov, -1.f)), 1.f);
-            glm::vec3 dir = glm::normalize(glm::vec3(invView * viewSpaceDir) - camTM.GetTranslation());
-
-            glm::vec4 result = glm::vec4(Raytrace(camTM.GetTranslation(), dir, 0, 1), 1);*/
-
-            glm::vec4 result = { 0, 1, 1, 1};
-
-            colorData[y * width + x] = result;
-            avgIntensity += glm::vec3(result);
-        }
-    }
+    float Lmax = 10.f;
+    float logavg = 0;
     
-    glBindTexture(GL_TEXTURE_2D, viewportTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_FLOAT, colorData);
+    // goofy multithreading to try and speed up this bs
+    atomic<int> counter = 0;
+    for (int y = 0; y < height; y++)
+        threads.push_back(thread(CalculateRow, y, &rowNits[y], Lmax, &counter));
+    while (counter.load() < height)
+        continue;
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, viewportTex);
+    // calculate log-average luminance
+    for (int i = 0; i < height; i++)
+        logavg += rowNits[i];
 
-    avgIntensity /= (float)(width * height);
+    logavg /= width * height;
 
     trShader.use();
-    trShader.SetVector3("avgIntensity", avgIntensity);
+    trShader.SetFloat("LAvg", logavg);
+    trShader.SetFloat("LMax", Lmax);
+    trShader.SetFloat("Ldmax", 500.f);
+    trShader.SetFloat("KeyValue", 0.18f);
+    trShader.SetBool("Ward", true);
+
+    glBindTexture(GL_TEXTURE_2D, viewportTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, colorData);
+    glGenerateMipmap(GL_TEXTURE_2D);
     
     tri.Draw(trShader);
+
+    delete[] rowNits;
 }
 
 // called when window is first created or when window is resized
@@ -319,6 +421,7 @@ int main(int argc, char* argv[])
         glfwPollEvents();
     }
 
+    delete[] colorData;
     glfwTerminate();
     return 0;
 }

@@ -12,8 +12,9 @@ struct AB::KDNode
 	// AABB
 	glm::vec3 min, max;
 
-	// indicies of tris inside AABB
-	vector<unsigned int> vertIndices;
+	// pointers to verts inside AABB
+	// every 3 verts = a tri. Thus, there should be duplicate ptrs in here.
+	vector<Vertex*> verts;
 
 	// children
 	KDNode* left;
@@ -62,7 +63,7 @@ glm::vec3 GetBaryCoords(glm::vec3 origin, glm::vec3 dir, glm::vec3 p0, glm::vec3
 
 	// if determinant is near 0, ray lies in tri plane.
 	front = det > 0;
-	if (abs(det) < EPSILON)
+	if (glm::abs(det) < EPSILON)
 		return uvw;
 
 	float f = (1.f / det);
@@ -96,32 +97,39 @@ bool Scene::Raycast(glm::vec3 origin, glm::vec3 dir, RaycastHit& hit)
 	{
 		for (Mesh& m : obj.GetMeshes())
 		{
-			for (int i = 0; i < m.indices.size(); i++)
+			switch (m.type)
 			{
-				// Get the first vert in this tri to get the world matrix
-				Vertex p0 = m.vertices[m.indices[i]];
-				Vertex p1 = m.vertices[m.indices[i]];
-				Vertex p2 = m.vertices[m.indices[i]];
-
-				bool thisfront = true;
-				glm::vec3 uvw = GetBaryCoords(origin, dir, p0.Position, p1.Position, p2.Position, thisfront);
-				if (uvw.z > EPSILON && uvw.z < resultUVW.z)
+			case MESH_TRI:
+				for (int i = 0; i < m.indices.size(); i += 3)
 				{
-					resultUVW = uvw;
-					hitTri[0] = p0;
-					hitTri[1] = p1;
-					hitTri[2] = p2;
+					// Get the first vert in this tri to get the world matrix
+					Vertex p0 = m.vertices[m.indices[i]];
+					Vertex p1 = m.vertices[m.indices[i + 1]];
+					Vertex p2 = m.vertices[m.indices[i + 2]];
 
-					hit.front = thisfront;
-					hit.gameObject = &obj;
-					successful = true;
+					bool thisfront = true;
+					glm::vec3 uvw = GetBaryCoords(origin, dir, p0.Position, p1.Position, p2.Position, thisfront);
+					if (uvw.z > EPSILON && uvw.z < resultUVW.z)
+					{
+						resultUVW = uvw;
+						hitTri[0] = p0;
+						hitTri[1] = p1;
+						hitTri[2] = p2;
+
+						hit.front = thisfront;
+						hit.gameObject = &obj;
+						successful = true;
+					}
 				}
+				break;
+			case MESH_SPHERE:
+
+				break;
 			}
 		}
 	}
 
-	// If found the barycentric coords of the tri hit, 
-	// interpolate to find position, normal, and texcoords
+	// interpolate bary coords to find pos, normal, and texcoords
 	if (successful)
 	{
 		hit.position = (1 - resultUVW.x - resultUVW.y) * hitTri[0].Position + resultUVW.x * hitTri[1].Position + resultUVW.y * hitTri[2].Position;

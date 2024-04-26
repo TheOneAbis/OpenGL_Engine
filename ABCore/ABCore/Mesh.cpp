@@ -9,11 +9,18 @@ using namespace AB;
 
 Mesh::Mesh(vector<Vertex> vertices, vector<unsigned int> indices, vector<Texture> textures)
 {
+    this->type = MESH_TRI;
 	this->vertices = vertices;
 	this->indices = indices;
 	this->textures = textures;
 
 	RefreshBuffers();
+}
+
+Mesh::Mesh(float radius)
+{
+    this->type = MESH_SPHERE;
+    this->radius = radius;
 }
 
 Mesh::~Mesh()
