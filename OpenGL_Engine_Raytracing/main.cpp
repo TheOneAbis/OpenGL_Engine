@@ -24,7 +24,7 @@ using namespace AB;
 
 // the window's width and height
 GLFWwindow* window;
-int width = 800, height = 600;
+int width = 800, height = 800;
 
 struct Light
 {
@@ -57,7 +57,8 @@ float aspect = (float)width / (float)height;
 float fov = glm::pi<float>() / 2.f;
 glm::vec3 ambient = glm::vec3(0.1f, 0.1f, 0.1f);
 glm::vec3 screenCol = glm::vec3(0.25f, 0.61f, 1.f);
-int recursionDepth = 4;
+int recursionDepth = 5;
+float LMax = 10.f;
 
 GameObject* mFloor;
 
@@ -74,21 +75,24 @@ void init()
             { glm::vec3(3, 1, 0), glm::vec3(), glm::vec2() }
         },
         { 0, 1, 2 }, {});
-    colorData = new glm::vec3[width * height];
 
     // set up scene models
     // mirror sphere
-    GameObject* smallSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
-    smallSphere->SetWorldTM({-1.f, -0.35f, -2.f}, glm::quat(), {0.5f, 0.5f, 0.5f});
+    //GameObject* smallSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx", "Mirror Sphere"));
+    //smallSphere->SetWorldTM({ -1.f, -0.35f, -2.f }, glm::quat(), { 0.5f, 0.5f, 0.5f });
+
+    GameObject* smallSphere = Scene::Get().Add(GameObject({ Mesh(0.5f) }, "Mirror Sphere"));
+    smallSphere->SetWorldTM({ -1.f, -0.35f, -2.f });
+
     smallSphere->GetMaterial().albedo = { 0.7f, 0.7f, 0.7f };
     smallSphere->GetMaterial().roughness = 0.f;
     smallSphere->GetMaterial().transmissive = 0.f;
     smallSphere->GetMaterial().reflectance = 0.75f;
     smallSphere->GetMaterial().diffuse = 0.25f;
-    //
+    
     // glass sphere
-    GameObject* bigSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx"));
-    bigSphere->SetWorldTM({ 0, 0, -1.5f }, glm::quat(), {.75f, .75f, .75f});
+    GameObject* bigSphere = Scene::Get().Add(GameObject({Mesh(0.75f)}, "Glass Sphere"));
+    bigSphere->SetWorldTM({ 0, 0, -1.5f });
     bigSphere->GetMaterial().albedo = { 1, 1, 1 };
     bigSphere->GetMaterial().roughness = 0.8f;
     //bigSphere->GetMaterial().metallic = 0.5f;
@@ -97,6 +101,7 @@ void init()
     bigSphere->GetMaterial().diffuse = 0.075f;
     bigSphere->GetMaterial().refraction = 0.95f;
     
+    // floor
     mFloor = Scene::Get().Add(GameObject({ Mesh(
         {
             { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
@@ -105,7 +110,7 @@ void init()
             { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
         }, 
         { 0, 1, 2, 0, 2, 3 }, 
-        vector<Texture>()) }));
+        vector<Texture>()) }, "Floor"));
     mFloor->SetWorldTM(Transform({-2, -1, 0}, glm::quat(), {3, 1, 5}));
     mFloor->GetMaterial().albedo = { 0.2f, 0.3f, 0.9f };
 
@@ -249,9 +254,9 @@ glm::vec3 LocalIlluminate(glm::vec3 origin, RaycastHit hit)
     {
         glm::vec3 lightDir = l.Type == LIGHT_TYPE_DIRECTIONAL ? l.Direction * 500.f : hit.position - l.Position;
         bool attenuate = l.Type != LIGHT_TYPE_DIRECTIONAL;
-
+        
         // shadow ray for each light; do lighting if no hit
-        if (!Scene::Get().Raycast(hit.position, -lightDir, glm::length(lightDir)))
+        if (!Scene::Get().Raycast(hit.position, glm::normalize(-lightDir), glm::length(lightDir)))
         {
             lightDir = glm::normalize(lightDir);
             glm::vec3 lightCol = Phong(hit.normal, lightDir, l.Color, baseColor, viewVector, spec, m.diffuse) * l.Intensity;
@@ -303,13 +308,12 @@ glm::vec3 Raytrace(glm::vec3 origin, glm::vec3 dir, int depth, float incomingRef
     }
 }
 
-inline float ToLuminance(glm::vec3 color, float Lmax)
+inline float ToLuminance(glm::vec3 color)
 {
-    color *= Lmax;
     return 0.27f * color.r + 0.67f * color.g + 0.06f * color.b;
 }
 
-void CalculateRow(int y, float* rowNits, float Lmax, atomic<int>* counter)
+void CalculateRow(int y, float* rowNits, atomic<int>* counter)
 {
     float totalNits = 0;
     for (int x = 0; x < width; x++)
@@ -323,27 +327,33 @@ void CalculateRow(int y, float* rowNits, float Lmax, atomic<int>* counter)
         colorData[y * width + x] = result;
 
         // add log(l) to total
-        totalNits += glm::log(FLT_EPSILON + ToLuminance(result, Lmax));
+        float l = ToLuminance(result * LMax);
+        totalNits += glm::log(FLT_EPSILON + l);
     }
     *rowNits = totalNits;
-    counter->store(counter->load() + 1);
+    int current = counter->load();
+    counter->store(current + 1);
 }
 
 // called when the GL context need to be rendered
 void display(void)
 {
+    colorData = new glm::vec3[width * height];
+
     glClearColor(0.25f, 0.61f, 1.f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glm::mat4 invView = glm::inverse(glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
     float* rowNits = new float[height];
-
-    float Lmax = 10.f;
     float logavg = 0;
     
     // goofy multithreading to try and speed up this bs
     atomic<int> counter = 0;
     for (int y = 0; y < height; y++)
-        threads.push_back(thread(CalculateRow, y, &rowNits[y], Lmax, &counter));
+    {
+        CalculateRow(y, &rowNits[y], &counter);
+        //threads.push_back(thread(CalculateRow, y, &rowNits[y], Lmax, &counter));
+    }
+        
     while (counter.load() < height)
         continue;
 
@@ -354,11 +364,11 @@ void display(void)
     logavg /= width * height;
 
     trShader.use();
-    trShader.SetFloat("LAvg", logavg);
-    trShader.SetFloat("LMax", Lmax);
-    trShader.SetFloat("Ldmax", 500.f);
-    trShader.SetFloat("KeyValue", 0.18f);
-    trShader.SetBool("Ward", true);
+    trShader.SetFloat("LAvg", glm::exp(logavg));
+    trShader.SetFloat("LMax", LMax);
+    trShader.SetFloat("LdMax", 500.f);
+    trShader.SetFloat("KeyValue", 0.72f);
+    trShader.SetBool("Ward", false);
 
     glBindTexture(GL_TEXTURE_2D, viewportTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, colorData);
@@ -367,6 +377,7 @@ void display(void)
     tri.Draw(trShader);
 
     delete[] rowNits;
+    delete[] colorData;
 }
 
 // called when window is first created or when window is resized
@@ -421,7 +432,6 @@ int main(int argc, char* argv[])
         glfwPollEvents();
     }
 
-    delete[] colorData;
     glfwTerminate();
     return 0;
 }

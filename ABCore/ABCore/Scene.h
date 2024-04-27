@@ -13,7 +13,6 @@ namespace AB
 		glm::vec3 normal;
 		glm::vec2 texcoord;
 		GameObject* gameObject;
-		bool front;
 	};
 
 	// Singleton to manage all game objects in the world

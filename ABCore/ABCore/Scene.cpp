@@ -1,5 +1,7 @@
 #include "Scene.h"
 
+#include <iostream>
+
 #define EPSILON 0.0001f
 
 using namespace AB;
@@ -88,9 +90,15 @@ glm::vec3 GetBaryCoords(glm::vec3 origin, glm::vec3 dir, glm::vec3 p0, glm::vec3
 // Returns false if no hit
 bool Scene::Raycast(glm::vec3 origin, glm::vec3 dir, RaycastHit& hit)
 {
+	dir = glm::normalize(dir);
+
 	bool successful = false;
-	glm::vec3 resultUVW{ -1, -1, 999999.f};
+	glm::vec3 resultUVW{ -1, -1, 999999.f };
 	Vertex hitTri[3];
+	bool front = true;
+
+	MeshType lastType;
+	float hitRadius;
 
 	// loop through all tri's in scene (every 3 indices)
 	for (GameObject& obj : gameobjects)
@@ -111,19 +119,41 @@ bool Scene::Raycast(glm::vec3 origin, glm::vec3 dir, RaycastHit& hit)
 					glm::vec3 uvw = GetBaryCoords(origin, dir, p0.Position, p1.Position, p2.Position, thisfront);
 					if (uvw.z > EPSILON && uvw.z < resultUVW.z)
 					{
+						lastType = MESH_TRI;
 						resultUVW = uvw;
 						hitTri[0] = p0;
 						hitTri[1] = p1;
 						hitTri[2] = p2;
+						front = thisfront;
 
-						hit.front = thisfront;
 						hit.gameObject = &obj;
 						successful = true;
 					}
 				}
 				break;
 			case MESH_SPHERE:
+				glm::vec3 cToO = origin - obj.GetWorldTM().GetTranslation();
 
+				float B = 2.f * glm::dot(dir, cToO);
+				float C = glm::dot(cToO, cToO) - (m.radius * m.radius);
+				float d = B * B - 4.f * C;
+
+				if (d < 0.f) continue; // no hit
+
+				float w1 = (-B + glm::sqrt(d)) / 2.f;
+				float w2 = (-B - glm::sqrt(d)) / 2.f;
+				float w0 = glm::min(w1, w2);
+				if (w0 <= EPSILON) w0 = glm::max(w1, w2);
+				if (w0 > EPSILON && w0 < resultUVW.z)
+				{
+					lastType = MESH_SPHERE;
+					resultUVW.z = w0;
+
+					hitRadius = m.radius;
+
+					hit.gameObject = &obj;
+					successful = true;
+				}
 				break;
 			}
 		}
@@ -132,9 +162,19 @@ bool Scene::Raycast(glm::vec3 origin, glm::vec3 dir, RaycastHit& hit)
 	// interpolate bary coords to find pos, normal, and texcoords
 	if (successful)
 	{
-		hit.position = (1 - resultUVW.x - resultUVW.y) * hitTri[0].Position + resultUVW.x * hitTri[1].Position + resultUVW.y * hitTri[2].Position;
-		hit.normal = glm::normalize((1 - resultUVW.x - resultUVW.y) * hitTri[0].Normal + resultUVW.x * hitTri[1].Normal + resultUVW.y * hitTri[2].Normal) * (hit.front ? 1.f : -1.f);
-		hit.texcoord = (1 - resultUVW.x - resultUVW.y) * hitTri[0].TexCoord + resultUVW.x * hitTri[1].TexCoord + resultUVW.y * hitTri[2].TexCoord;
+		if (lastType == MESH_TRI)
+		{
+			hit.position = (1 - resultUVW.x - resultUVW.y) * hitTri[0].Position + resultUVW.x * hitTri[1].Position + resultUVW.y * hitTri[2].Position;
+			hit.normal = glm::normalize((1 - resultUVW.x - resultUVW.y) * hitTri[0].Normal + resultUVW.x * hitTri[1].Normal + resultUVW.y * hitTri[2].Normal) * (front ? 1.f : -1.f);
+			hit.texcoord = (1 - resultUVW.x - resultUVW.y) * hitTri[0].TexCoord + resultUVW.x * hitTri[1].TexCoord + resultUVW.y * hitTri[2].TexCoord;
+		}
+		else if (lastType == MESH_SPHERE)
+		{
+			hit.position = origin + (dir * resultUVW.z);
+			hit.normal = (hit.position - hit.gameObject->GetWorldTM().GetTranslation()) / hitRadius;
+			if (glm::dot(dir, hit.normal) > 0.f)
+				hit.normal *= -1.f;
+		}
 	}
 
 	return successful;
@@ -145,21 +185,40 @@ bool Scene::Raycast(glm::vec3 origin, glm::vec3 dir, float maxDistance)
 	// loop through all tri's in scene (every 3 indices)
 	for (GameObject& obj : gameobjects)
 	{
-		glm::mat4 world = obj.GetWorldTM().GetMatrix();
-
 		for (Mesh& m : obj.GetMeshes())
 		{
-			for (int i = 0; i < m.indices.size(); i++)
+			switch (m.type)
 			{
-				// Get the first vert in this tri to get the world matrix
-				Vertex p0 = m.vertices[m.indices[i]];
-				Vertex p1 = m.vertices[m.indices[i]];
-				Vertex p2 = m.vertices[m.indices[i]];
+			case MESH_TRI:
+				for (int i = 0; i < m.indices.size(); i++)
+				{
+					// Get the first vert in this tri to get the world matrix
+					Vertex p0 = m.vertices[m.indices[i]];
+					Vertex p1 = m.vertices[m.indices[i]];
+					Vertex p2 = m.vertices[m.indices[i]];
 
-				bool junk;
-				glm::vec3 uvw = GetBaryCoords(origin, dir, p0.Position, p1.Position, p2.Position, junk);
-				if (uvw.z > EPSILON && uvw.z < maxDistance)
+					bool junk;
+					glm::vec3 uvw = GetBaryCoords(origin, dir, p0.Position, p1.Position, p2.Position, junk);
+					if (uvw.z > EPSILON && uvw.z < maxDistance)
+						return true;
+				}
+				break;
+			case MESH_SPHERE:
+				glm::vec3 cToO = origin - obj.GetWorldTM().GetTranslation();
+
+				float B = 2.f * glm::dot(dir, cToO);
+				float C = glm::dot(cToO, cToO) - (m.radius * m.radius);
+				float d = B * B - 4.f * C;
+
+				if (d < 0.f) continue;
+
+				float w1 = (-B + glm::sqrt(d)) / 2.f;
+				float w2 = (-B - glm::sqrt(d)) / 2.f;
+				float w0 = glm::min(w1, w2);
+				if (w0 <= EPSILON) w0 = glm::max(w1, w2);
+				if (w0 > EPSILON && w0 < maxDistance) 
 					return true;
+				break;
 			}
 		}
 	}

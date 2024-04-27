@@ -29,7 +29,7 @@ namespace AB
 		Transform GetLocalTM();
 
 		void SetWorldTM(Transform newT);
-		void SetWorldTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
+		void SetWorldTM(glm::vec3 translation, glm::quat rotation = glm::quat(), glm::vec3 scale = glm::vec3(1, 1, 1));
 		void SetLocalTM(Transform newT);
 		void SetLocalTM(glm::vec3 translation, glm::quat rotation, glm::vec3 scale);
 

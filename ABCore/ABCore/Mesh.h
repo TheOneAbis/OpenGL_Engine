@@ -37,7 +37,7 @@ namespace AB
 		std::vector<unsigned int> indices;
 		std::vector<Texture> textures;
 
-		Mesh() { VAO = VBO = EBO = 0; };
+		Mesh() { VAO = VBO = EBO = radius = 0; };
 		~Mesh();
 		Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices, std::vector<Texture> textures);
 		Mesh(float radius);

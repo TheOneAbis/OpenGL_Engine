@@ -20,6 +20,7 @@ Mesh::Mesh(vector<Vertex> vertices, vector<unsigned int> indices, vector<Texture
 Mesh::Mesh(float radius)
 {
     this->type = MESH_SPHERE;
+    this->EBO = this->VBO = this->VAO = 0;
     this->radius = radius;
 }
 
@@ -37,6 +38,10 @@ Mesh::~Mesh()
 
 void Mesh::RefreshBuffers()
 {
+    if (vertices.empty()) return;
+
+    type = MESH_TRI;
+
     if (VAO)
         glDeleteVertexArrays(1, &VAO);
     if (VBO)
