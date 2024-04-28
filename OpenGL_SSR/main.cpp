@@ -47,6 +47,7 @@ Shader shader, ssrShader;
 Mesh ssrTri;
 unsigned int framebuffer;
 unsigned int colorTex, posTex, normalTex;
+unsigned int depthStencil;
 
 Transform camTM;
 glm::vec2 camEulers;
@@ -59,7 +60,7 @@ void init()
 
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
-    
+
     oldT = glfwGetTime();
 
     // set up shader
@@ -107,7 +108,7 @@ void init()
     sun.Type = LIGHT_TYPE_DIRECTIONAL;
     sun.Color = glm::vec3(1, 1, 1);
     sun.Intensity = 0.5f;
-    sun.Direction = {1, -1, 0.5f};
+    sun.Direction = { 1, -1, 0.5f };
     lights.push_back(sun);
 
     ssrTri = Mesh(
@@ -128,29 +129,39 @@ void init()
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    // attach new texture to currently bound framebuffer object
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
 
     glGenTextures(1, &normalTex);
     glBindTexture(GL_TEXTURE_2D, normalTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, normalTex, 0);
 
     glGenTextures(1, &posTex);
     glBindTexture(GL_TEXTURE_2D, posTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, posTex, 0);
+
+    // render buffer instead of texture for depth/stencil; not expecting to need to sample from this, so an RBO is faster
+    glGenRenderbuffers(1, &depthStencil);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthStencil);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0); // unbind
+    // attach new renderbuffer to currently bound framebuffer
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencil);
 
     // configure framebuffer with these textures
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, colorTex, 0);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, normalTex, 0);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, posTex, 0);
-
     unsigned int DrawBuffers[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
     glDrawBuffers(3, DrawBuffers);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         cout << "ERROR: Framebuffer shat itself!" << endl;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void Tick()
@@ -192,17 +203,20 @@ void Tick()
 // called when the GL context need to be rendered
 void display()
 {
-    // clear the screen to white, which is the background color
-    glClearColor(0.1f, 0.1f, 0.1f, 0.f);
+    glm::mat4 view = glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f));
+    glm::mat4 proj = glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f);
 
-    // clear the buffer stored for drawing
+    // set to render to the framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // use normal shader to render colors, normals and positions to textures
     shader.use();
 
-    shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
-    shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
+    shader.SetMatrix4x4("projection", proj);
+    shader.SetMatrix4x4("view", view);
     shader.SetVector3("cameraPosition", camTM.GetTranslation());
     shader.SetVector3("ambient", glm::vec3(0.05f, 0.05f, 0.05f));
 
@@ -218,17 +232,27 @@ void display()
         shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
     }
 
-    // render to the framebuffer
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-    glViewport(0, 0, width, height);
-
     Scene::Get().Render(shader);
+
+    // render to the screen
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDisable(GL_DEPTH_TEST);
+    glClearColor(1.f, 1.f, 1.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     // use SSR shader to use newly rendered textures from above for the final result
     ssrShader.use();
 
-    // render to the screen
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    ssrShader.SetMatrix4x4("view", view);
+    ssrShader.SetMatrix4x4("projection", proj);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, colorTex);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, normalTex);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, posTex);
+    
     ssrTri.Draw(ssrShader);
 }
 

@@ -1,13 +1,14 @@
 #version 450 core
 
 // Texture samplers
-uniform sampler2D positionTexture;
-uniform sampler2D normalTexture;
-uniform sampler2D colorTexture;
+layout (binding = 0) uniform sampler2D colorTexture;
+layout (binding = 1) uniform sampler2D normalTexture;
+layout (binding = 2) uniform sampler2D positionTexture;
 
 // INPUTS, UNIFORM, OUTPUTS
 uniform mat4 projection;
-uniform vec3 cameraPosition;
+uniform mat4 view;
+
 uniform float maxDistance;
 uniform float resolution;
 uniform int steps;
@@ -21,14 +22,21 @@ void main()
     vec2 texSize = textureSize(positionTexture, 0).xy;
     vec2 texCoord = gl_FragCoord.xy / texSize;
 
-    vec4 worldPos = texture(positionTexture, texCoord);
-    vec3 viewVec = normalize(worldPos.xyz - cameraPosition);
-    vec3 normal = normalize(texture(normalTexture, texCoord).xyz);
+    // Textures are in world space, so convert everything to view space
+    vec4 viewPos = view * texture(positionTexture, texCoord);
+    vec3 viewVec = normalize(viewPos.xyz);
+    vec3 normal = normalize(mat3(view) * texture(normalTexture, texCoord).xyz);
     vec3 refl = reflect(viewVec, normal);
 
     // reflection ray start and end points
-    vec4 start = vec4(worldPos.xyz, 1);
-    vec4 end = vec4(worldPos.xyz + (refl * maxDistance), 1);
+    vec4 start = vec4(viewPos.xyz, 1);
+    vec4 end = vec4(viewPos.xyz + (refl * maxDistance), 1);
 
+    vec4 startFrag = projection * start; // convert from view to screen
+    startFrag.xyz /= startFrag.w;
+    startFrag.xy = (startFrag.xy * 0.5f + 0.5f) * texSize; // convert screen to UV to frag coords (is this really necessary?)
 
+    vec4 endFrag = projection * end;
+    endFrag.xyz /= endFrag.w;
+    endFrag.xy = (endFrag.xy * 0.5f + 0.5f) * texSize;
 }

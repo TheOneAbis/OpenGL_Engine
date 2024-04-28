@@ -54,24 +54,18 @@ float Attenuate(Light light, vec3 worldPos)
 // --     PHYSICALLY-BASED RENDERING (Cook-Torrence)     -- \\
 // -------------------------------------------------------- \\
 
-// The fresnel value for non-metals (dielectrics)
+// The fresnel value for non-metals
 const float NONMETAL_F0 = 0.04f;
 const float MIN_ROUGHNESS = 0.0000001f;
 const float PI = 3.14159265359f;
 
-// Calculates diffuse amount based on energy conservation
-// diffuse - Diffuse amount
-// F - Fresnel result from microfacet BRDF
-// metalness - surface metalness amount
+// Diffuse from energy conservation
 vec3 DiffuseEnergyConserve(float diffuse, vec3 F, float metalness)
 {
     return diffuse * (1 - F) * (1 - metalness);
 }
 
-// Normal Distribution Function: GGX (Trowbridge-Reitz)
-// a - Roughness
-// h - Half vector: (V + L)/2
-// n - Normal
+// Normal Distribution Trowbridge-Reitz
 // D(h, n, a) = a^2 / pi * ((n dot h)^2 * (a^2 - 1) + 1)^2
 float D_GGX(vec3 n, vec3 h, float roughness)
 {
@@ -79,20 +73,15 @@ float D_GGX(vec3 n, vec3 h, float roughness)
     float NdotH = clamp(dot(n, h), 0.f, 1.f);
     float NdotH2 = NdotH * NdotH;
     float a = roughness * roughness;
-    float a2 = max(a * a, MIN_ROUGHNESS); // Applied after remap!
+    float a2 = max(a * a, MIN_ROUGHNESS);
 
 	// ((n dot h)^2 * (a^2 - 1) + 1)
-	// Can go to zero if roughness is 0 and NdotH is 1
     float denomToSquare = NdotH2 * (a2 - 1) + 1;
 
-	// Final value
     return a2 / (PI * denomToSquare * denomToSquare);
 }
 
-// Fresnel term - Schlick approx.
-// v - View vector
-// h - Half vector
-// f0 - Value when l = n
+// Fresnel term - Schlick
 // F(v,h,f0) = f0 + (1-f0)(1 - (v dot h))^5
 vec3 F_Schlick(vec3 v, vec3 h, vec3 f0)
 {
@@ -101,31 +90,18 @@ vec3 F_Schlick(vec3 v, vec3 h, vec3 f0)
 }
 
 // Geometric Shadowing - Schlick-GGX
-// - k is remapped to a / 2, roughness remapped to (r+1)/2 before squaring!
-// n - Normal
-// v - View vector
-// G_Schlick(n,v,a) = (n dot v) / ((n dot v) * (1 - k) * k)
-// Full G(n,v,l,a) term = G_SchlickGGX(n,v,a) * G_SchlickGGX(n,l,a)
+// - k is remapped to a / 2, roughness remapped to (r+1)/2 before squaring
 float G_SchlickGGX(vec3 n, vec3 v, float roughness)
 {
-	// End result of remapping:
+	// remapping
     float k = pow(roughness + 1, 2) / 8.0f;
     float NdotV = clamp(dot(n, v), 0.f, 1.f);
 
-	// Final value
-	// Note: Numerator should be NdotV (or NdotL depending on parameters).
-	// However, these are also in the BRDF's denominator, so they'll cancel!
-	// We're leaving them out here AND in the BRDF function as the
-	// dot products can get VERY small and cause rounding errors.
     return 1 / (NdotV * (1 - k) + k);
 }
 
 // Cook-Torrance Microfacet BRDF (Specular)
 // f(l,v) = D(h)F(v,h)G(l,v,h) / 4(n dot l)(n dot v)
-// - parts of the denominator are canceled out by numerator (see below)
-// D() - Normal Distribution Function - Trowbridge-Reitz (GGX)
-// F() - Fresnel - Schlick approx
-// G() - Geometric Shadowing - Schlick-GGX
 vec3 MicrofacetBRDF(vec3 n, vec3 l, vec3 v, float roughness, vec3 f0, out vec3 F_out)
 {
     vec3 h = normalize(v + l);
@@ -138,31 +114,24 @@ vec3 MicrofacetBRDF(vec3 n, vec3 l, vec3 v, float roughness, vec3 f0, out vec3 F
     F_out = F;
 
 	// Final specular formula
-	// Note: The denominator SHOULD contain (NdotV)(NdotL), but they'd be
-	// canceled out by our G() term.  As such, they have been removed
-	// from BOTH places to prevent floating point rounding errors.
     vec3 specularResult = (D * F * G) / 4.f;
-
-	// One last non-obvious requirement: According to the rendering equation,
-	// specular must have the same NdotL applied as diffuse!  We'll apply
-	// that here so that minimal changes are required elsewhere.
     return specularResult * max(dot(n, l), 0);
 }
 
 vec3 CookTorrence(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor,
     vec3 viewVec, float lightIntensity, float roughness, float metalness, vec3 specColor)
 {
-    // Diffuse is still just N dot L
+    // Diffuse uses same formula as Phong
     float diffuse = DiffuseBRDF(normal, -lightDir);
     
     // Get specular color and fresnel result
     vec3 fresnel;
     vec3 spec = MicrofacetBRDF(normal, -lightDir, viewVec, roughness, specColor, fresnel);
     
-    // Calculate diffuse with energy conservation, including cutting diffuse for metals
+    // Calculate diffuse with energy conservation
     vec3 balancedDiff = DiffuseEnergyConserve(diffuse, fresnel, metalness);
     
-    // Combine the final diffuse and specular values for this light
+    // Final diffuse & specular combination
     return (balancedDiff * surfaceColor + spec) * lightIntensity * lightColor;
 }
 
