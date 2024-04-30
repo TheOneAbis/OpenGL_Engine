@@ -268,8 +268,8 @@ void display()
     //cout << v3.x << " " << v3.y << " " << v3.z << " " << " " << endl;
     ssrShader.SetMatrix4x4("projection", proj);
     ssrShader.SetFloat("resolution", 0.3f);
-    ssrShader.SetInt("steps", 5);
-    ssrShader.SetFloat("thickness", 0.5f);
+    ssrShader.SetInt("steps", 10);
+    ssrShader.SetFloat("thickness", 0.3f);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTex);

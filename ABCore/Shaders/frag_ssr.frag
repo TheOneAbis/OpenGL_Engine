@@ -1,5 +1,7 @@
 #version 450 core
 
+#define MAX_ITERATION 1000
+
 // Texture samplers
 layout (binding = 0) uniform sampler2D colorTexture;
 layout (binding = 1) uniform sampler2D normalTexture;
@@ -29,7 +31,7 @@ void main()
         return;
     }
 
-    vec4 uv = vec4(0.f);
+    vec2 uv = vec2(0.f);
 
     // Textures are in world space, so convert everything to view space
     vec4 viewPos = texture(positionTexture, texCoord);
@@ -40,7 +42,7 @@ void main()
 
     // reflection ray start and end points
     vec4 startView = vec4(viewPos.xyz, 1);
-    vec4 endView = vec4(viewPos.xyz + (refl * 1000.f), 1);
+    vec4 endView = vec4(viewPos.xyz + (refl * 30.f), 1);
 
     vec4 startFrag = projection * startView;
     startFrag.xyz /= startFrag.w;
@@ -53,7 +55,7 @@ void main()
     endFrag.xy *= texSize;
 
     vec2 frag = startFrag.xy;
-    uv.xy = frag / texSize;
+    uv = frag / texSize;
     
     vec2 delta = endFrag.xy - startFrag.xy;
 
@@ -72,12 +74,12 @@ void main()
     float viewDist = startView.x;
     // view distance difference between current ray point and scene position
     float depth = thickness;
-
+    
     // first pass
-    for (int i = 0; i < int(maxDelta); i++)
+    for (int i = 0; i < int(maxDelta) && i < MAX_ITERATION; i++)
     {
         frag += incr;
-        uv.xy = frag / texSize;
+        uv = frag / texSize;
         viewPosTo = texture(positionTexture, uv.xy);
         
         // search1 = percentage along line that frag is currently at
@@ -102,11 +104,11 @@ void main()
     search1 = search0 + ((search1 - search0) / 2.f);
     
     // if ray hit, do second pass
-    for (int i = 0; i < steps * firstHit; i++)
+    for (int i = 0; i < steps * firstHit && i < MAX_ITERATION; i++)
     {
         frag = mix(startFrag.xy, endFrag.xy, search1);
 
-        uv.xy = frag / texSize;
+        uv = frag / texSize;
         viewPosTo = texture(positionTexture, uv.xy);
 
         viewDist = (startView.y * endView.y) / mix(endView.y, startView.y, search1);
@@ -124,7 +126,7 @@ void main()
             search0 = temp;
         }
     }
-
+    
     // calculate visibility of reflection
     // interpolate visibility based on how much refl points toward camera
     float visibility = secondHit * viewPosTo.w * (1.f - max(dot(-viewVec, refl), 0.f));
@@ -134,9 +136,6 @@ void main()
     visibility *= uv.y < 0 || uv.y > 1 ? 0 : 1;
     visibility = clamp(visibility, 0, 1);
 
-    uv.zw = vec2(visibility);
-
-    float alpha = clamp(uv.b, 0, 1);
     vec4 reflColor = spec > 0.f ? texture(colorTexture, uv.xy) : vec4(0);
-    fragColor = initialColor + (reflColor * alpha);
+    fragColor = initialColor + (reflColor * visibility);
 }
