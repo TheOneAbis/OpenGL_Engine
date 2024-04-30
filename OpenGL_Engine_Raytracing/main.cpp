@@ -58,7 +58,7 @@ float fov = glm::pi<float>() / 2.f;
 glm::vec3 ambient = glm::vec3(0.1f, 0.1f, 0.1f);
 glm::vec3 screenCol = glm::vec3(0.25f, 0.61f, 1.f);
 int recursionDepth = 5;
-float LMax = 10.f;
+float LMax = 500.f;
 
 GameObject* mFloor;
 
@@ -256,7 +256,7 @@ glm::vec3 LocalIlluminate(glm::vec3 origin, RaycastHit hit)
         bool attenuate = l.Type != LIGHT_TYPE_DIRECTIONAL;
         
         // shadow ray for each light; do lighting if no hit
-        if (!Scene::Get().Raycast(hit.position, glm::normalize(-lightDir), glm::length(lightDir)))
+        if (!Scene::Get().Raycast(hit.position, glm::normalize(-lightDir), nullptr, glm::length(lightDir)))
         {
             lightDir = glm::normalize(lightDir);
             glm::vec3 lightCol = Phong(hit.normal, lightDir, l.Color, baseColor, viewVector, spec, m.diffuse) * l.Intensity;
@@ -280,7 +280,7 @@ glm::vec3 Raytrace(glm::vec3 origin, glm::vec3 dir, int depth, float incomingRef
         return glm::vec3(0, 0, 0);
     
     RaycastHit hit;
-    if (Scene::Get().Raycast(origin, dir, hit))
+    if (Scene::Get().Raycast(origin, dir, &hit))
     {
         // Local illumination and shadow casting
         glm::vec3 lightColor = LocalIlluminate(origin, hit);
@@ -368,7 +368,8 @@ void display(void)
     trShader.SetFloat("LMax", LMax);
     trShader.SetFloat("LdMax", 500.f);
     trShader.SetFloat("KeyValue", 0.72f);
-    trShader.SetBool("Ward", false);
+    trShader.SetFloat("bias", 0.85f);
+    trShader.SetUint("operator", 0);
 
     glBindTexture(GL_TEXTURE_2D, viewportTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, colorData);

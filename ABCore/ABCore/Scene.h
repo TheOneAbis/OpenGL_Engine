@@ -35,8 +35,7 @@ namespace AB
 
 		void CreateTree(int depth);
 
-		bool Raycast(glm::vec3 origin, glm::vec3 dir, RaycastHit& hit);
-		bool Raycast(glm::vec3 origin, glm::vec3 dir, float maxDistance = 999999.f);
+		bool Raycast(glm::vec3 origin, glm::vec3 dir, RaycastHit* hit = nullptr, float maxDistance = 999999.f);
 
 		void Render(Shader& shader);
 
@@ -45,7 +44,10 @@ namespace AB
 	private:
 
 		static Scene* instance;
-		Scene() {};
+		Scene() { root = nullptr; };
+
+		bool RaycastInternal(glm::vec3 origin, glm::vec3 dir, RaycastHit* hit, float maxDistance);
+		bool RaycastTreeInternal(glm::vec3 origin, glm::vec3 dir, RaycastHit* hit, float maxDistance);
 
 		std::vector<GameObject> gameobjects;
 		KDNode* root;
