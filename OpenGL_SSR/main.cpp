@@ -46,7 +46,7 @@ vector<Light> lights;
 Shader shader, ssrShader;
 Mesh ssrTri;
 unsigned int framebuffer;
-unsigned int colorTex, posTex, normalTex, specTex;
+unsigned int colorTex, posTex, normalTex;
 unsigned int depthStencil;
 
 Transform camTM;
@@ -159,13 +159,6 @@ void init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, posTex, 0);
 
-    glGenTextures(1, &specTex);
-    glBindTexture(GL_TEXTURE_2D, specTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, specTex, 0);
-
     // render buffer instead of texture for depth/stencil; not expecting to need to sample from this, so an RBO is faster
     glGenRenderbuffers(1, &depthStencil);
     glBindRenderbuffer(GL_RENDERBUFFER, depthStencil);
@@ -175,7 +168,7 @@ void init()
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencil);
 
     // configure framebuffer with these textures
-    unsigned int DrawBuffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+    unsigned int DrawBuffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
     glDrawBuffers(4, DrawBuffers);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -225,6 +218,7 @@ void display()
 {
     glm::mat4 view = glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f));
     glm::mat4 proj = glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f);
+    glm::vec4 ambient = glm::vec4(0.05f, 0.05f, 0.05f, 1.f);
 
     // set to render to the framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -238,7 +232,7 @@ void display()
     shader.SetMatrix4x4("projection", proj);
     shader.SetMatrix4x4("view", view);
     shader.SetVector3("cameraPosition", camTM.GetTranslation());
-    shader.SetVector3("ambient", glm::vec3(0.05f, 0.05f, 0.05f));
+    shader.SetVector3("ambient", glm::vec3(ambient));
 
     // Lighting uniform data
     for (unsigned int i = 0; i < lights.size(); i++)
@@ -262,14 +256,12 @@ void display()
 
     // use SSR shader to use newly rendered textures from above for the final result
     ssrShader.use();
-    glm::vec4 v = proj * glm::vec4(0.5f, 0, -0.5, 1);
-    glm::vec3 v3 = glm::vec3(v);
-    v3 /= v.w;
-    //cout << v3.x << " " << v3.y << " " << v3.z << " " << " " << endl;
+
     ssrShader.SetMatrix4x4("projection", proj);
     ssrShader.SetFloat("resolution", 0.3f);
-    ssrShader.SetInt("steps", 10);
+    ssrShader.SetInt("steps", 2);
     ssrShader.SetFloat("thickness", 0.3f);
+    ssrShader.SetVector4("ambient", ambient);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTex);
@@ -277,8 +269,6 @@ void display()
     glBindTexture(GL_TEXTURE_2D, normalTex);
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, posTex);
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, specTex);
     
     ssrTri.Draw(ssrShader);
 }

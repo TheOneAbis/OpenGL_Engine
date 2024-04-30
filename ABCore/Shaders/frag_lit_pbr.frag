@@ -165,7 +165,7 @@ layout (location = 3) out vec4 fragSpecular;
 void main()
 {
     fragViewPos = vec4(viewPos, 1);
-    fragViewNormal = vec4(normalize(viewNormal), 1);
+    fragViewNormal = vec4(normalize(viewNormal), roughness);
 
     vec3 viewVector = normalize(viewPos);
 

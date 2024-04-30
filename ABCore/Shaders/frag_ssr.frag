@@ -1,12 +1,11 @@
 #version 450 core
 
-#define MAX_ITERATION 1000
+#define MAX_ITERATION 2000
 
 // Texture samplers
 layout (binding = 0) uniform sampler2D colorTexture;
 layout (binding = 1) uniform sampler2D normalTexture;
 layout (binding = 2) uniform sampler2D positionTexture;
-layout (binding = 3) uniform sampler2D specularTexture;
 
 // INPUTS, UNIFORM, OUTPUTS
 uniform mat4 projection;
@@ -23,8 +22,8 @@ void main()
     vec2 texSize = textureSize(positionTexture, 0).xy;
     vec2 texCoord = gl_FragCoord.xy / texSize;
     vec4 initialColor = texture(colorTexture, texCoord);
-
-    float spec = 1 - texture(specularTexture, texCoord).w;
+    vec4 normalData = texture(normalTexture, texCoord);
+    float spec = 1 - normalData.w;
     if (spec <= 0.001f)
     {
         fragColor = initialColor;
@@ -37,7 +36,7 @@ void main()
     vec4 viewPos = texture(positionTexture, texCoord);
     vec4 viewPosTo = viewPos;
     vec3 viewVec = normalize(viewPos.xyz);
-    vec3 normal = normalize(texture(normalTexture, texCoord).xyz);
+    vec3 normal = normalize(normalData.xyz);
     vec3 refl = reflect(viewVec, normal);
 
     // reflection ray start and end points
@@ -56,6 +55,8 @@ void main()
 
     vec2 frag = startFrag.xy;
     uv = frag / texSize;
+    fragColor = vec4(endFrag.xy / texSize, 0, 1);
+    return;
     
     vec2 delta = endFrag.xy - startFrag.xy;
 
