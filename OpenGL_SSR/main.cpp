@@ -46,7 +46,7 @@ vector<Light> lights;
 Shader shader, ssrShader;
 Mesh ssrTri;
 unsigned int framebuffer;
-unsigned int colorTex, posTex, normalTex;
+unsigned int colorTex, posTex, depthTex, normalTex;
 unsigned int depthStencil;
 
 Transform camTM;
@@ -64,8 +64,8 @@ void init()
     oldT = glfwGetTime();
 
     // set up shader
-    shader = Shader("C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/vertex.vert", "C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/frag_lit_pbr.frag");
-    ssrShader = Shader("C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/vert_screen.vert", "C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/frag_ssr.frag");
+    shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
+    ssrShader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_ssr2.frag");
 
     // set up scene models
     Scene& scene = Scene::Get();
@@ -152,12 +152,19 @@ void init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, normalTex, 0);
 
-    glGenTextures(1, &posTex);
-    glBindTexture(GL_TEXTURE_2D, posTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+    glGenTextures(1, &depthTex);
+    glBindTexture(GL_TEXTURE_2D, depthTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, posTex, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, depthTex, 0);
+
+    //glGenTextures(1, &posTex);
+    //glBindTexture(GL_TEXTURE_2D, posTex);
+    //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    //glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, posTex, 0);
 
     // render buffer instead of texture for depth/stencil; not expecting to need to sample from this, so an RBO is faster
     glGenRenderbuffers(1, &depthStencil);
@@ -168,8 +175,8 @@ void init()
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencil);
 
     // configure framebuffer with these textures
-    unsigned int DrawBuffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-    glDrawBuffers(4, DrawBuffers);
+    unsigned int DrawBuffers[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+    glDrawBuffers(3, DrawBuffers);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         cout << "ERROR: Framebuffer shat itself!" << endl;
@@ -268,7 +275,8 @@ void display()
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, normalTex);
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, posTex);
+    //glBindTexture(GL_TEXTURE_2D, posTex);
+    glBindTexture(GL_TEXTURE_2D, depthTex);
     
     ssrTri.Draw(ssrShader);
 }
