@@ -145,7 +145,6 @@ uniform sampler2D texture_normal[1];
 in vec3 worldPos;
 in vec3 viewPos;
 in vec3 normal;
-in vec3 viewNormal;
 in vec2 texCoord;
 
 uniform vec3 albedoColor;
@@ -158,22 +157,18 @@ uniform vec3 cameraPosition;
 uniform Light[MAX_LIGHT_COUNT] lights;
 
 layout (location = 0) out vec3 fragColor;
-layout (location = 1) out vec4 fragViewNormal;
-layout (location = 2) out vec4 fragViewPos;
-layout (location = 3) out vec4 fragSpecular;
+layout (location = 1) out vec4 fragNormal;
 
 void main()
 {
-    fragViewPos = vec4(viewPos, 1);
-    fragViewNormal = vec4(normalize(viewNormal), 1 - roughness);
+    fragNormal = vec4(normalize(normal), 1 - roughness);
 
-    vec3 viewVector = normalize(viewPos);
+    vec3 viewVector = normalize(cameraPosition - worldPos);
 
     // Get the actual base color from albedo and any textures
     vec3 baseColor = albedoColor * (useDiffuseTex ? texture(texture_diffuse[0], texCoord).xyz : vec3(1));
 
     vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), baseColor, metallic);
-    fragSpecular = vec4(specularColor, roughness);
 
     vec3 totalLightColor = ambient * baseColor * (1 - metallic);
     totalLightColor += emissive.xxx;
