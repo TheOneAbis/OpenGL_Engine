@@ -157,13 +157,14 @@ uniform vec3 cameraPosition;
 uniform Light[MAX_LIGHT_COUNT] lights;
 
 layout (location = 0) out vec3 fragColor;
-layout (location = 1) out vec4 fragNormalReflMask;
-layout (location = 2) out float fragDepth;
+layout (location = 1) out vec4 fragViewNormal;
+layout (location = 2) out vec4 fragViewPos;
+layout (location = 3) out float fragDepth;
 
 void main()
 {
-    fragNormalReflMask.xyz = normalize(viewNormal);
-    fragNormalReflMask.w = 1.f - roughness;
+    fragViewPos = vec4(viewPos, 1);
+    fragViewNormal = vec4(normalize(viewNormal), 1 - roughness);
     fragDepth = gl_FragCoord.z;
 
     vec3 viewVector = normalize(cameraPosition - worldPos);

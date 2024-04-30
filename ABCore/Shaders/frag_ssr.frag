@@ -1,95 +1,142 @@
 #version 450 core
 
 #define MAX_ITERATION 2000
-#define MAX_THICKNESS 0.001f
 
 // Texture samplers
 layout (binding = 0) uniform sampler2D colorTexture;
 layout (binding = 1) uniform sampler2D normalTexture;
-layout (binding = 2) uniform sampler2D depthTexture;
+layout (binding = 2) uniform sampler2D positionTexture;
 
 // INPUTS, UNIFORM, OUTPUTS
 uniform mat4 projection;
-uniform vec4 skyColor;
+
+uniform float resolution;
+uniform int steps;
+uniform float thickness;
 
 out vec4 fragColor;
 
 void main()
 {
-    vec2 texSize = textureSize(colorTexture, 0).xy;
-
-    // adding 0.5 moves position to center of the pixel area
-    vec2 texCoord = (gl_FragCoord.xy + 0.5f) / texSize; // [0 - 1]
-
-    vec4 color = texture(colorTexture, texCoord);
+    // get texture dimensions and the coord of this pixel
+    vec2 texSize = textureSize(positionTexture, 0).xy;
+    vec2 texCoord = gl_FragCoord.xy / texSize;
+    vec4 initialColor = texture(colorTexture, texCoord);
     vec4 normalData = texture(normalTexture, texCoord);
-    vec3 normal = normalData.xyz;
-    float reflMask = normalData.w;
-    
-    vec4 reflectionColor = vec4(0);
-    if (reflMask != 0.f)
+    float spec = 1 - normalData.w;
+    if (spec <= 0.001f)
     {
-        // compute position, reflection vec, max trace dist of this sample in tex space
-        float depth = texture(depthTexture, texCoord).x;
-        vec4 posInCS = vec4(texCoord * 2.f - 1.f, depth, 1.f);
-        vec4 posInVS = inverse(projection) * posInCS;
-        posInVS /= posInVS.w;
-
-        vec3 camToPosVS = normalize(posInVS.xyz);
-        vec4 reflectionVS = vec4(reflect(camToPosVS.xyz, normal), 0);
-
-        vec4 reflEndPosVS = posInVS + reflectionVS * 1000.f;
-        reflEndPosVS /= (reflEndPosVS.z < 0 ? reflEndPosVS.z : 1);
-        
-        vec4 reflEndPosCS = projection * vec4(reflEndPosVS.xyz, 1);
-        reflEndPosCS /= reflEndPosCS.w;
-        vec3 reflDir = normalize((reflEndPosCS - posInCS).xyz);
-
-        // convert to texture space
-        posInCS.xy *= vec2(0.5f, -0.5f);
-        posInCS.xy += vec2(0.5f, 0.5f);
-        vec3 posInTS = posInCS.xyz;
-        reflDir.xy *= vec2(0.5f, -0.5f);
-
-        // Calculate max distance before ray goes outside visible area
-        float maxDist = reflDir.x >= 0 ? (1 - posInTS.x) / reflDir.x : -posInTS.x / reflDir.x;
-        maxDist = min(maxDist, reflDir.y < 0 ? (-posInTS.y / reflDir.y) : ((1 - posInTS.y) / reflDir.y));
-        maxDist = min(maxDist, reflDir.z < 0 ? (-posInTS.z / reflDir.z) : ((1 - posInTS.z) / reflDir.z));
-
-        // find intersection in tex space by tracing reflection ray
-        vec3 reflEndPosTS = posInTS + reflDir * maxDist;
-        
-        // calculate ray delta
-        vec3 dp = reflEndPosTS - posInTS;
-        ivec2 screenPos = ivec2(posInTS.xy * texSize);
-        ivec2 endScreenPos = ivec2(reflEndPosTS.xy * texSize);
-        ivec2 dp2 = endScreenPos - screenPos;
-        const int max_dist = max(abs(dp2.x), abs(dp2.y));
-        dp /= max_dist;
-
-        vec4 rayPosInTS = vec4(posInTS.xyz + dp, 0);
-        vec4 vRayDirInTS = vec4(dp.xyz, 0);
-	    vec4 rayStartPos = rayPosInTS;
-
-        int hitIndex = -1;
-        for(int i = 0; i < max_dist && i < MAX_ITERATION; i++)
-        {
-            float depth = texture(depthTexture, rayPosInTS.xy).x;
-	        float thickness = rayPosInTS.z - depth;
-	        hitIndex = (thickness >= 0 && thickness < MAX_THICKNESS) ? i : hitIndex;
-
-            if (hitIndex != -1) break;
-		
-            rayPosInTS += vRayDirInTS;
-        }
-
-        // calculate intersect position
-        vec3 intersection = rayStartPos.xyz + vRayDirInTS.xyz * hitIndex;
-        float intensity = hitIndex >= 0 ? 1.f : 0.f;
-
-        // compute reflection vec if intersected
-        reflectionColor = mix(skyColor, texture(colorTexture, intersection.xy), intensity);
+        fragColor = initialColor;
+        return;
     }
-    // add reflection color to color of sample
-    fragColor = color + reflectionColor;
+
+    vec2 uv = vec2(0.f);
+
+    // Textures are in world space, so convert everything to view space
+    vec4 viewPos = texture(positionTexture, texCoord);
+    vec4 viewPosTo = viewPos;
+    vec3 viewVec = normalize(viewPos.xyz);
+    vec3 normal = normalize(normalData.xyz);
+    vec3 refl = reflect(viewVec, normal);
+
+    // reflection ray start and end points
+    vec4 startView = vec4(viewPos.xyz, 1);
+    vec4 endView = vec4(viewPos.xyz + (refl * 30.f), 1);
+
+    vec4 startFrag = projection * startView;
+    startFrag.xyz /= startFrag.w;
+    startFrag.xy = startFrag.xy * 0.5f + 0.5f;
+    startFrag.xy *= texSize;
+
+    vec4 endFrag = projection * endView;
+    endFrag.xyz /= endFrag.w;
+    endFrag.xy = endFrag.xy * 0.5f + 0.5f;
+    endFrag.xy *= texSize;
+
+    vec2 frag = startFrag.xy;
+    uv = frag / texSize;
+    fragColor = vec4(endFrag.xy / texSize, 0, 1);
+    return;
+    
+    vec2 delta = endFrag.xy - startFrag.xy;
+
+    // utilize the larger difference of the 2 axes
+    float useX = abs(delta.x) >= abs(delta.y) ? 1 : 0;
+    float maxDelta = mix(abs(delta.y), abs(delta.x), useX) * clamp(resolution, 0, 1);
+
+    // determine how much to increment per march; if resolution < 1 frags will be skipped
+    vec2 incr = delta / max(maxDelta, 0.001f);
+
+    // search0 remembers the last position on the line where the ray didn't hit anything.
+    // used to refine the point at which the ray actually hits later on.
+    float search0 = 0, search1 = 0;
+    int firstHit = 0, secondHit = 0;
+
+    float viewDist = startView.x;
+    // view distance difference between current ray point and scene position
+    float depth = thickness;
+    
+    // first pass
+    for (int i = 0; i < int(maxDelta) && i < MAX_ITERATION; i++)
+    {
+        frag += incr;
+        uv = frag / texSize;
+        viewPosTo = texture(positionTexture, uv.xy);
+        
+        // search1 = percentage along line that frag is currently at
+        search1 = mix((frag.y - startFrag.y) / delta.y, (frag.x - startFrag.x) / delta.x, useX);
+        search1 = clamp(search1, 0, 1);
+
+        viewDist = (startView.y * endView.y) / mix(endView.y, startView.y, search1);
+        depth = viewDist - viewPosTo.y;
+
+        if (depth > 0 && depth < thickness) // hit
+        {
+            firstHit = 1;
+            break;
+        }
+        else // not hit
+        {  
+            search0 = search1;
+        }
+    }
+
+    // set search1 to halfway between last miss and last hit
+    search1 = search0 + ((search1 - search0) / 2.f);
+    
+    // if ray hit, do second pass
+    for (int i = 0; i < steps * firstHit && i < MAX_ITERATION; i++)
+    {
+        frag = mix(startFrag.xy, endFrag.xy, search1);
+
+        uv = frag / texSize;
+        viewPosTo = texture(positionTexture, uv.xy);
+
+        viewDist = (startView.y * endView.y) / mix(endView.y, startView.y, search1);
+        depth = viewDist - viewPosTo.y;
+
+        if (depth > 0 && depth < thickness) // hit
+        {
+            secondHit = 1;
+            search1 = search0 + ((search1 - search0) / 2.f);
+        }
+        else // no hit
+        {
+            float temp = search1;
+            search1 = search1 + ((search1 - search0) / 2.f);
+            search0 = temp;
+        }
+    }
+    
+    // calculate visibility of reflection
+    // interpolate visibility based on how much refl points toward camera
+    float visibility = secondHit * viewPosTo.w * (1.f - max(dot(-viewVec, refl), 0.f));
+    visibility *= 1 - clamp(depth / thickness, 0, 1); // fade out reflection further it is from exact intersection pt
+    visibility *= 1 - clamp(length(viewPosTo - viewPos) / 1000.f, 0, 1); // fade out based on refl distance from start
+    visibility *= uv.x < 0 || uv.x > 1 ? 0 : 1; // 0 if refl travels outside cam frustum
+    visibility *= uv.y < 0 || uv.y > 1 ? 0 : 1;
+    visibility = clamp(visibility, 0, 1);
+
+    vec4 reflColor = spec > 0.f ? texture(colorTexture, uv.xy) : vec4(0);
+    fragColor = initialColor + (reflColor * visibility);
 }

@@ -29,5 +29,8 @@
     <None Include="..\ABCore\Shaders\frag_ssr.frag">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="..\ABCore\Shaders\frag_ssr2.frag">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
