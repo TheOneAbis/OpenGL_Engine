@@ -137,10 +137,12 @@ vec3 CookTorrence(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor
 
 // Texture samplers
 uniform sampler2D texture_diffuse[1];
+uniform bool useDiffuseTex;
 uniform sampler2D texture_specular[1];
 uniform sampler2D texture_normal[1];
 
 // INPUTS, UNIFORM, OUTPUTS
+in vec3 viewNormal;
 in vec3 worldPos;
 in vec3 normal;
 in vec2 texCoord;
@@ -160,14 +162,14 @@ layout (location = 2) out float fragDepth;
 
 void main()
 {
-    fragNormalReflMask.xyz = normalize(normal);
+    fragNormalReflMask.xyz = normalize(viewNormal);
     fragNormalReflMask.w = 1.f - roughness;
     fragDepth = gl_FragCoord.z;
 
     vec3 viewVector = normalize(cameraPosition - worldPos);
 
     // Get the actual base color from albedo and any textures
-    vec3 baseColor = albedoColor * texture(texture_diffuse[0], texCoord).xyz;
+    vec3 baseColor = albedoColor * (useDiffuseTex ? texture(texture_diffuse[0], texCoord).xyz : vec3(1));
 
     vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), baseColor, metallic);
 

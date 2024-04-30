@@ -93,7 +93,19 @@ void init()
     ground->SetWorldTM(Transform({ 40, -3, -42.5 }, glm::quat(), { 0.01, 0.01, 0.01 }));
     for (Mesh& m : ground->GetMeshes())
         m.AddTexture("texture_diffuse", "forest_ground.png", "../Assets");
-    ground->GetMaterial().roughness = 0.f;
+
+    GameObject* water = Scene::Get().Add(GameObject({ Mesh(
+        {
+            { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
+            { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
+            { glm::vec3(1.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) },
+            { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
+        },
+        { 0, 1, 2, 0, 2, 3 },
+        vector<Texture>()) }, "water"));
+    water->SetWorldTM(Transform({ -8, -1.5, 8 }, glm::quat(), { 25, 1, 25 }));
+    water->GetMaterial().albedo = { 0, 0, 0.5f };
+    water->GetMaterial().roughness = 0.f;
 
     // set up lights
     Light point = {};
@@ -134,7 +146,7 @@ void init()
 
     glGenTextures(1, &normalTex);
     glBindTexture(GL_TEXTURE_2D, normalTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, normalTex, 0);
@@ -246,7 +258,6 @@ void display()
     ssrShader.use();
 
     ssrShader.SetMatrix4x4("projection", proj);
-    ssrShader.SetMatrix4x4("view", view);
     ssrShader.SetFloat("maxThickness", 0.5f);
     ssrShader.SetVector4("skyColor", skyCol);
 

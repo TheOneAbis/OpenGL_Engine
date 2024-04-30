@@ -1,7 +1,6 @@
 #version 450 core
 
 #define MAX_ITERATION 2000
-#define STEP_SIZE 2
 #define MAX_THICKNESS 0.001f
 
 // Texture samplers
@@ -11,14 +10,9 @@ layout (binding = 2) uniform sampler2D depthTexture;
 
 // INPUTS, UNIFORM, OUTPUTS
 uniform mat4 projection;
-uniform mat4 view;
-
 uniform vec4 skyColor;
 
 out vec4 fragColor;
-
-const float near = 0.1f;
-const float far = 10.f;
 
 void main()
 {
@@ -28,17 +22,16 @@ void main()
     vec2 texCoord = (gl_FragCoord.xy + 0.5f) / texSize; // [0 - 1]
 
     vec4 color = texture(colorTexture, texCoord);
-    vec4 normalRefl = texture(normalTexture, texCoord);
-    vec4 worldNormal = vec4(normalize(normalRefl.xyz), 0);
-    vec3 normal = (view * worldNormal).xyz;
-    float reflMask = normalRefl.w;
+    vec4 normalData = texture(normalTexture, texCoord);
+    vec3 normal = normalData.xyz;
+    float reflMask = normalData.w;
     
     vec4 reflectionColor = vec4(0);
     if (reflMask != 0.f)
     {
         // compute position, reflection vec, max trace dist of this sample in tex space
         float depth = texture(depthTexture, texCoord).x;
-        vec4 posInCS = vec4(texCoord * 2.f - 1.f, depth, 1.f) * -1.f;
+        vec4 posInCS = vec4(texCoord * 2.f - 1.f, depth, 1.f);
         vec4 posInVS = inverse(projection) * posInCS;
         posInVS /= posInVS.w;
 
@@ -60,8 +53,8 @@ void main()
 
         // Calculate max distance before ray goes outside visible area
         float maxDist = reflDir.x >= 0 ? (1 - posInTS.x) / reflDir.x : -posInTS.x / reflDir.x;
-        maxDist = min(maxDist, reflDir.y <0 ? (-posInTS.y / reflDir.y) : ((1 - posInTS.y) / reflDir.y));
-        maxDist = min(maxDist, reflDir.z <0 ? (-posInTS.z / reflDir.z) : ((1 - posInTS.z) / reflDir.z));
+        maxDist = min(maxDist, reflDir.y < 0 ? (-posInTS.y / reflDir.y) : ((1 - posInTS.y) / reflDir.y));
+        maxDist = min(maxDist, reflDir.z < 0 ? (-posInTS.z / reflDir.z) : ((1 - posInTS.z) / reflDir.z));
 
         // find intersection in tex space by tracing reflection ray
         vec3 reflEndPosTS = posInTS + reflDir * maxDist;
@@ -79,7 +72,7 @@ void main()
 	    vec4 rayStartPos = rayPosInTS;
 
         int hitIndex = -1;
-        for(int i = 0; i < max_dist && i < MAX_ITERATION; i += 4)
+        for(int i = 0; i < max_dist && i < MAX_ITERATION; i++)
         {
             float depth = texture(depthTexture, rayPosInTS.xy).x;
 	        float thickness = rayPosInTS.z - depth;
@@ -91,10 +84,8 @@ void main()
         }
 
         // calculate intersect position
-        bool intersected = hitIndex >= 0;
         vec3 intersection = rayStartPos.xyz + vRayDirInTS.xyz * hitIndex;
-
-        float intensity = intersected ? 1 : 0;
+        float intensity = hitIndex >= 0 ? 1.f : 0.f;
 
         // compute reflection vec if intersected
         reflectionColor = mix(skyColor, texture(colorTexture, intersection.xy), intensity);
