@@ -46,7 +46,7 @@ vector<Light> lights;
 Shader shader, ssrShader;
 Mesh ssrTri;
 unsigned int framebuffer;
-unsigned int colorTex, posTex, normalTex;
+unsigned int colorTex, posTex, normalTex, specTex;
 unsigned int depthStencil;
 
 Transform camTM;
@@ -146,6 +146,13 @@ void init()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, posTex, 0);
 
+    glGenTextures(1, &specTex);
+    glBindTexture(GL_TEXTURE_2D, specTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, specTex, 0);
+
     // render buffer instead of texture for depth/stencil; not expecting to need to sample from this, so an RBO is faster
     glGenRenderbuffers(1, &depthStencil);
     glBindRenderbuffer(GL_RENDERBUFFER, depthStencil);
@@ -155,8 +162,8 @@ void init()
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencil);
 
     // configure framebuffer with these textures
-    unsigned int DrawBuffers[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-    glDrawBuffers(3, DrawBuffers);
+    unsigned int DrawBuffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
+    glDrawBuffers(4, DrawBuffers);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         cout << "ERROR: Framebuffer shat itself!" << endl;
@@ -243,8 +250,11 @@ void display()
     // use SSR shader to use newly rendered textures from above for the final result
     ssrShader.use();
 
-    ssrShader.SetMatrix4x4("view", view);
     ssrShader.SetMatrix4x4("projection", proj);
+    ssrShader.SetFloat("maxDistance", 15.f);
+    ssrShader.SetFloat("resolution", 0.3f);
+    ssrShader.SetInt("steps", 10);
+    ssrShader.SetFloat("thickness", 0.5f);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTex);
@@ -252,6 +262,8 @@ void display()
     glBindTexture(GL_TEXTURE_2D, normalTex);
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, posTex);
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, specTex);
     
     ssrTri.Draw(ssrShader);
 }

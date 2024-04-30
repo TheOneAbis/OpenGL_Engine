@@ -142,7 +142,9 @@ uniform sampler2D texture_normal[1];
 
 // INPUTS, UNIFORM, OUTPUTS
 in vec3 worldPos;
+in vec3 viewPos;
 in vec3 normal;
+in vec3 viewNormal;
 in vec2 texCoord;
 
 uniform vec3 albedoColor;
@@ -155,20 +157,22 @@ uniform vec3 cameraPosition;
 uniform Light[MAX_LIGHT_COUNT] lights;
 
 layout (location = 0) out vec3 fragColor;
-layout (location = 1) out vec3 fragNormal;
-layout (location = 2) out vec3 fragWorldPos;
+layout (location = 1) out vec3 fragViewNormal;
+layout (location = 2) out vec3 fragViewPos;
+layout (location = 3) out vec4 fragSpecular;
 
 void main()
 {
-    fragNormal = normalize(normal);
+    fragViewPos = viewPos;
+    fragViewNormal = normalize(viewNormal);
 
-    vec3 viewVector = normalize(cameraPosition - worldPos);
-    fragWorldPos = worldPos;
+    vec3 viewVector = normalize(viewPos);
 
     // Get the actual base color from albedo and any textures
     vec3 baseColor = albedoColor * texture(texture_diffuse[0], texCoord).xyz;
 
     vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), baseColor, metallic);
+    fragSpecular = vec4(specularColor, roughness);
 
     vec3 totalLightColor = ambient * baseColor * (1 - metallic);
     totalLightColor += emissive.xxx;
@@ -192,7 +196,7 @@ void main()
                 attenuate = true;
                 break;
         }
-        vec3 lightCol = CookTorrence(fragNormal, lightDir, lights[i].Color, baseColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
+        vec3 lightCol = CookTorrence(normalize(normal), lightDir, lights[i].Color, baseColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
 
         // If this is a point or spot light, attenuate the color
         if (attenuate)
