@@ -8,9 +8,7 @@ layout (binding = 3) uniform sampler2D specularTexture;
 
 // INPUTS, UNIFORM, OUTPUTS
 uniform mat4 projection;
-uniform mat4 view;
 
-uniform float maxDistance;
 uniform float resolution;
 uniform int steps;
 uniform float thickness;
@@ -22,6 +20,14 @@ void main()
     // get texture dimensions and the coord of this pixel
     vec2 texSize = textureSize(positionTexture, 0).xy;
     vec2 texCoord = gl_FragCoord.xy / texSize;
+    vec4 initialColor = texture(colorTexture, texCoord);
+
+    float spec = 1 - texture(specularTexture, texCoord).w;
+    if (spec <= 0.001f)
+    {
+        fragColor = initialColor;
+        return;
+    }
 
     vec4 uv = vec4(0.f);
 
@@ -34,16 +40,14 @@ void main()
 
     // reflection ray start and end points
     vec4 startView = vec4(viewPos.xyz, 1);
-    vec4 endView = vec4(viewPos.xyz + (refl * maxDistance), 1);
+    vec4 endView = vec4(viewPos.xyz + (refl * 1000.f), 1);
 
-    vec4 startFrag = startView;
-    startFrag = projection * startFrag;
+    vec4 startFrag = projection * startView;
     startFrag.xyz /= startFrag.w;
     startFrag.xy = startFrag.xy * 0.5f + 0.5f;
     startFrag.xy *= texSize;
 
-    vec4 endFrag = endView;
-    endFrag = projection * endFrag;
+    vec4 endFrag = projection * endView;
     endFrag.xyz /= endFrag.w;
     endFrag.xy = endFrag.xy * 0.5f + 0.5f;
     endFrag.xy *= texSize;
@@ -125,11 +129,14 @@ void main()
     // interpolate visibility based on how much refl points toward camera
     float visibility = secondHit * viewPosTo.w * (1.f - max(dot(-viewVec, refl), 0.f));
     visibility *= 1 - clamp(depth / thickness, 0, 1); // fade out reflection further it is from exact intersection pt
-    visibility *= 1 - clamp(length(viewPosTo - viewPos) / maxDistance, 0, 1); // fade out based on refl distance from start
+    visibility *= 1 - clamp(length(viewPosTo - viewPos) / 1000.f, 0, 1); // fade out based on refl distance from start
     visibility *= uv.x < 0 || uv.x > 1 ? 0 : 1; // 0 if refl travels outside cam frustum
     visibility *= uv.y < 0 || uv.y > 1 ? 0 : 1;
     visibility = clamp(visibility, 0, 1);
 
     uv.zw = vec2(visibility);
-    fragColor = uv;
+
+    float alpha = clamp(uv.b, 0, 1);
+    vec4 reflColor = spec > 0.f ? texture(colorTexture, uv.xy) : vec4(0);
+    fragColor = initialColor + (reflColor * alpha);
 }

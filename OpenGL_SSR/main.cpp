@@ -52,7 +52,7 @@ unsigned int depthStencil;
 Transform camTM;
 glm::vec2 camEulers;
 float dt, oldT;
-float camSpeed = 30.f;
+float camSpeed = 3.f;
 
 void init()
 {
@@ -64,36 +64,49 @@ void init()
     oldT = glfwGetTime();
 
     // set up shader
-    shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
-    ssrShader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_ssr.frag");
+    shader = Shader("C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/vertex.vert", "C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/frag_lit_pbr.frag");
+    ssrShader = Shader("C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/vert_screen.vert", "C:/Users/arjun/source/repos/OpenGL_Engine/ABCore/Shaders/frag_ssr.frag");
 
     // set up scene models
     Scene& scene = Scene::Get();
-    GameObject* firTree = scene.Add(GameObject("../Assets/Fir_Tree.fbx", "Fir Tree"));
-    firTree->SetWorldTM({ 10, 0, -20.f }, glm::quat({ 0, 0.7, 0 }), { 0.1, 0.1, 0.1 });
+    GameObject* firTree = scene.Add(GameObject("C:/Users/arjun/source/repos/OpenGL_Engine/Assets/Fir_Tree.fbx", "Fir Tree"));
+    firTree->SetWorldTM({ 1, 0, -2.f }, glm::quat({ 0, 0.7, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : firTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "C:/Users/arjun/source/repos/OpenGL_Engine/Assets/");
 
-    GameObject* poplarTree = scene.Add(GameObject("../Assets/Poplar_Tree.fbx", "Poplar Tree"));
-    poplarTree->SetWorldTM({ 40, 0, -20 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    GameObject* poplarTree = scene.Add(GameObject("C:/Users/arjun/source/repos/OpenGL_Engine/Assets/Poplar_Tree.fbx", "Poplar Tree"));
+    poplarTree->SetWorldTM({ 4, 0, -2 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : poplarTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "C:/Users/arjun/source/repos/OpenGL_Engine/Assets");
 
-    GameObject* palmTree = scene.Add(GameObject("../Assets/Palm_Tree.fbx", "Palm Tree"));
-    palmTree->SetWorldTM({ 50, 0, -45 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    GameObject* palmTree = scene.Add(GameObject("C:/Users/arjun/source/repos/OpenGL_Engine/Assets/Palm_Tree.fbx", "Palm Tree"));
+    palmTree->SetWorldTM({ 5, 0, -4.5 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : palmTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "C:/Users/arjun/source/repos/OpenGL_Engine/Assets");
 
-    GameObject* oakTree = scene.Add(GameObject("../Assets/Oak_Tree.fbx", "Oak Tree"));
-    oakTree->SetWorldTM({ 25, 0, -60 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    GameObject* oakTree = scene.Add(GameObject("C:/Users/arjun/source/repos/OpenGL_Engine/Assets/Oak_Tree.fbx", "Oak Tree"));
+    oakTree->SetWorldTM({ 2.5, 0, -6 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : oakTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "C:/Users/arjun/source/repos/OpenGL_Engine/Assets");
 
     vector<int> indices = { 0, 1, 2, 0, 2, 3 };
-    GameObject* ground = scene.Add(GameObject("../Assets/Terrain.fbx", "Ground"));
-    ground->SetWorldTM(Transform({ 400, -30, -425 }, glm::quat(), { 0.1, 0.1, 0.1 }));
+    GameObject* ground = scene.Add(GameObject("C:/Users/arjun/source/repos/OpenGL_Engine/Assets/Terrain.fbx", "Ground"));
+    ground->SetWorldTM(Transform({ 40, -3, -42.5 }, glm::quat(), { 0.01, 0.01, 0.01 }));
     for (Mesh& m : ground->GetMeshes())
-        m.AddTexture("texture_diffuse", "forest_ground.png", "../Assets");
+        m.AddTexture("texture_diffuse", "forest_ground.png", "C:/Users/arjun/source/repos/OpenGL_Engine/Assets");
+
+    GameObject* water = Scene::Get().Add(GameObject({ Mesh(
+        {
+            { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
+            { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
+            { glm::vec3(1.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) },
+            { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
+        },
+        { 0, 1, 2, 0, 2, 3 },
+        vector<Texture>()) }, "Floor"));
+    water->SetWorldTM(Transform({ -7, -1.5f, 8 }, glm::quat(), { 25, 1, 25 }));
+    water->GetMaterial().albedo = { 0.0f, 0.0f, 0.5f };
+    water->GetMaterial().roughness = 0.f;
 
     // set up lights
     Light point = {};
@@ -101,7 +114,7 @@ void init()
     point.Color = glm::vec3(1, 1, 1);
     point.Intensity = 1;
     point.Position = glm::vec3(2, 2, -2.5);
-    point.Range = 20;
+    point.Range = 10;
     lights.push_back(point);
 
     Light sun = {};
@@ -134,14 +147,14 @@ void init()
 
     glGenTextures(1, &normalTex);
     glBindTexture(GL_TEXTURE_2D, normalTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, normalTex, 0);
 
     glGenTextures(1, &posTex);
     glBindTexture(GL_TEXTURE_2D, posTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, posTex, 0);
@@ -249,10 +262,11 @@ void display()
 
     // use SSR shader to use newly rendered textures from above for the final result
     ssrShader.use();
-
+    glm::vec4 v = proj * glm::vec4(0.5f, 0, -0.5, 1);
+    glm::vec3 v3 = glm::vec3(v);
+    v3 /= v.w;
+    //cout << v3.x << " " << v3.y << " " << v3.z << " " << " " << endl;
     ssrShader.SetMatrix4x4("projection", proj);
-    ssrShader.SetMatrix4x4("view", view);
-    ssrShader.SetFloat("maxDistance", 30.f);
     ssrShader.SetFloat("resolution", 0.3f);
     ssrShader.SetInt("steps", 5);
     ssrShader.SetFloat("thickness", 0.5f);

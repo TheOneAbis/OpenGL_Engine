@@ -137,6 +137,7 @@ vec3 CookTorrence(vec3 normal, vec3 lightDir, vec3 lightColor, vec3 surfaceColor
 
 // Texture samplers
 uniform sampler2D texture_diffuse[1];
+uniform bool useDiffuseTex;
 uniform sampler2D texture_specular[1];
 uniform sampler2D texture_normal[1];
 
@@ -157,19 +158,19 @@ uniform vec3 cameraPosition;
 uniform Light[MAX_LIGHT_COUNT] lights;
 
 layout (location = 0) out vec3 fragColor;
-layout (location = 1) out vec3 fragViewNormal;
-layout (location = 2) out vec3 fragViewPos;
+layout (location = 1) out vec4 fragViewNormal;
+layout (location = 2) out vec4 fragViewPos;
 layout (location = 3) out vec4 fragSpecular;
 
 void main()
 {
-    fragViewPos = viewPos;
-    fragViewNormal = normalize(viewNormal);
+    fragViewPos = vec4(viewPos, 1);
+    fragViewNormal = vec4(normalize(viewNormal), 1);
 
     vec3 viewVector = normalize(viewPos);
 
     // Get the actual base color from albedo and any textures
-    vec3 baseColor = albedoColor * texture(texture_diffuse[0], texCoord).xyz;
+    vec3 baseColor = albedoColor * (useDiffuseTex ? texture(texture_diffuse[0], texCoord).xyz : vec3(1));
 
     vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), baseColor, metallic);
     fragSpecular = vec4(specularColor, roughness);

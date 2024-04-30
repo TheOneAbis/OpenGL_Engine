@@ -128,6 +128,7 @@ void Mesh::Draw(Shader& shader, int drawMode)
     unsigned int diffuseNr = 0;
     unsigned int specularNr = 0;
 
+    shader.SetBool("useDiffuseTex", false);
     if (!textures.empty())
     {
         for (unsigned int i = 0; i < textures.size(); i++)
@@ -138,7 +139,10 @@ void Mesh::Draw(Shader& shader, int drawMode)
             string number;
             string name = textures[i].type;
             if (name == "texture_diffuse")
+            {
                 number = "[" + to_string(diffuseNr++) + "]";
+                shader.SetBool("useDiffuseTex", true);
+            }
             else if (name == "texture_specular")
                 number = to_string(specularNr++);
 
