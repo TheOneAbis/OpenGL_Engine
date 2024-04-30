@@ -8,6 +8,7 @@ layout (binding = 3) uniform sampler2D specularTexture;
 
 // INPUTS, UNIFORM, OUTPUTS
 uniform mat4 projection;
+uniform mat4 view;
 
 uniform float maxDistance;
 uniform float resolution;
@@ -35,18 +36,21 @@ void main()
     vec4 startView = vec4(viewPos.xyz, 1);
     vec4 endView = vec4(viewPos.xyz + (refl * maxDistance), 1);
 
-    vec4 startFrag = projection * startView; // convert from view to screen
+    vec4 startFrag = startView;
+    startFrag = projection * startFrag;
     startFrag.xyz /= startFrag.w;
-    startFrag.xy = (startFrag.xy * 0.5f + 0.5f) * texSize; // convert screen to UV to frag coords (is this really necessary?)
+    startFrag.xy = startFrag.xy * 0.5f + 0.5f;
+    startFrag.xy *= texSize;
 
-    vec4 endFrag = projection * endView;
+    vec4 endFrag = endView;
+    endFrag = projection * endFrag;
     endFrag.xyz /= endFrag.w;
-    endFrag.xy = (endFrag.xy * 0.5f + 0.5f) * texSize;
+    endFrag.xy = endFrag.xy * 0.5f + 0.5f;
+    endFrag.xy *= texSize;
 
     vec2 frag = startFrag.xy;
     uv.xy = frag / texSize;
     
-    // how many pixels the ray line occupies
     vec2 delta = endFrag.xy - startFrag.xy;
 
     // utilize the larger difference of the 2 axes

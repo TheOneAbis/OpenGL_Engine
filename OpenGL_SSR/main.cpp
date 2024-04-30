@@ -251,9 +251,10 @@ void display()
     ssrShader.use();
 
     ssrShader.SetMatrix4x4("projection", proj);
-    ssrShader.SetFloat("maxDistance", 15.f);
+    ssrShader.SetMatrix4x4("view", view);
+    ssrShader.SetFloat("maxDistance", 30.f);
     ssrShader.SetFloat("resolution", 0.3f);
-    ssrShader.SetInt("steps", 10);
+    ssrShader.SetInt("steps", 5);
     ssrShader.SetFloat("thickness", 0.5f);
 
     glActiveTexture(GL_TEXTURE0);
