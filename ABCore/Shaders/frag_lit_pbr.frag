@@ -142,8 +142,8 @@ uniform sampler2D texture_specular[1];
 uniform sampler2D texture_normal[1];
 
 // INPUTS, UNIFORM, OUTPUTS
-in vec3 viewNormal;
 in vec3 worldPos;
+in vec3 viewPos;
 in vec3 normal;
 in vec2 texCoord;
 
@@ -157,15 +157,11 @@ uniform vec3 cameraPosition;
 uniform Light[MAX_LIGHT_COUNT] lights;
 
 layout (location = 0) out vec3 fragColor;
-layout (location = 1) out vec4 fragViewNormal;
-layout (location = 2) out vec4 fragViewPos;
-layout (location = 3) out float fragDepth;
+layout (location = 1) out vec4 fragNormal;
 
 void main()
 {
-    fragViewPos = vec4(viewPos, 1);
-    fragViewNormal = vec4(normalize(viewNormal), 1 - roughness);
-    fragDepth = gl_FragCoord.z;
+    fragNormal = vec4(normalize(normal), 1 - roughness);
 
     vec3 viewVector = normalize(cameraPosition - worldPos);
 
@@ -196,7 +192,7 @@ void main()
                 attenuate = true;
                 break;
         }
-        vec3 lightCol = CookTorrence(fragNormalReflMask.xyz, lightDir, lights[i].Color, baseColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
+        vec3 lightCol = CookTorrence(normalize(normal), lightDir, lights[i].Color, baseColor, viewVector, lights[i].Intensity, roughness, metallic, specularColor);
 
         // If this is a point or spot light, attenuate the color
         if (attenuate)
