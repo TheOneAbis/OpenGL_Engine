@@ -9,9 +9,7 @@ uniform mat4 view;
 uniform mat4 projection;
 
 out vec3 worldPos;
-out vec3 viewPos;
 out vec3 normal;
-out vec3 viewNormal;
 out vec2 texCoord;
 
 void main()
@@ -19,8 +17,6 @@ void main()
     gl_Position = projection * view * world * vec4(vPos, 1.0);
 
     worldPos = (world * vec4(vPos, 1.f)).xyz;
-    viewPos = (view * world * vec4(vPos, 1.f)).xyz;
     normal = inverse(transpose(mat3(world))) * vNormal;
-    viewNormal = inverse(transpose(mat3(view * world))) * vNormal;
     texCoord = vTexCoord;
 }

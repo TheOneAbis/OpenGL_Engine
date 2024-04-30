@@ -46,13 +46,12 @@ vector<Light> lights;
 Shader shader, ssrShader;
 Mesh ssrTri;
 unsigned int framebuffer;
-unsigned int colorTex, posTex, normalTex, specTex;
-unsigned int depthStencil;
+unsigned int colorTex, depthTex, normalTex;
 
 Transform camTM;
 glm::vec2 camEulers;
 float dt, oldT;
-float camSpeed = 30.f;
+float camSpeed = 3.f;
 
 void init()
 {
@@ -70,30 +69,31 @@ void init()
     // set up scene models
     Scene& scene = Scene::Get();
     GameObject* firTree = scene.Add(GameObject("../Assets/Fir_Tree.fbx", "Fir Tree"));
-    firTree->SetWorldTM({ 10, 0, -20.f }, glm::quat({ 0, 0.7, 0 }), { 0.1, 0.1, 0.1 });
+    firTree->SetWorldTM({ 1, 0, -2.f }, glm::quat({ 0, 0.7, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : firTree->GetMeshes())
         m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
     GameObject* poplarTree = scene.Add(GameObject("../Assets/Poplar_Tree.fbx", "Poplar Tree"));
-    poplarTree->SetWorldTM({ 40, 0, -20 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    poplarTree->SetWorldTM({ 4, 0, -2 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : poplarTree->GetMeshes())
         m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
     GameObject* palmTree = scene.Add(GameObject("../Assets/Palm_Tree.fbx", "Palm Tree"));
-    palmTree->SetWorldTM({ 50, 0, -45 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    palmTree->SetWorldTM({ 5, 0, -4.5 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : palmTree->GetMeshes())
         m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
     GameObject* oakTree = scene.Add(GameObject("../Assets/Oak_Tree.fbx", "Oak Tree"));
-    oakTree->SetWorldTM({ 25, 0, -60 }, glm::quat({ 0, 0, 0 }), { 0.1, 0.1, 0.1 });
+    oakTree->SetWorldTM({ 2.5, 0, -6 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : oakTree->GetMeshes())
         m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
 
     vector<int> indices = { 0, 1, 2, 0, 2, 3 };
     GameObject* ground = scene.Add(GameObject("../Assets/Terrain.fbx", "Ground"));
-    ground->SetWorldTM(Transform({ 400, -30, -425 }, glm::quat(), { 0.1, 0.1, 0.1 }));
+    ground->SetWorldTM(Transform({ 40, -3, -42.5 }, glm::quat(), { 0.01, 0.01, 0.01 }));
     for (Mesh& m : ground->GetMeshes())
         m.AddTexture("texture_diffuse", "forest_ground.png", "../Assets");
+    ground->GetMaterial().roughness = 0.f;
 
     // set up lights
     Light point = {};
@@ -134,26 +134,20 @@ void init()
 
     glGenTextures(1, &normalTex);
     glBindTexture(GL_TEXTURE_2D, normalTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, normalTex, 0);
 
-    glGenTextures(1, &posTex);
-    glBindTexture(GL_TEXTURE_2D, posTex);
+    glGenTextures(1, &depthTex);
+    glBindTexture(GL_TEXTURE_2D, depthTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, posTex, 0);
-
-    glGenTextures(1, &specTex);
-    glBindTexture(GL_TEXTURE_2D, specTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_FLOAT, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, specTex, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, depthTex, 0);
 
     // render buffer instead of texture for depth/stencil; not expecting to need to sample from this, so an RBO is faster
+    unsigned int depthStencil;
     glGenRenderbuffers(1, &depthStencil);
     glBindRenderbuffer(GL_RENDERBUFFER, depthStencil);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
@@ -162,8 +156,8 @@ void init()
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencil);
 
     // configure framebuffer with these textures
-    unsigned int DrawBuffers[4] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3 };
-    glDrawBuffers(4, DrawBuffers);
+    unsigned int DrawBuffers[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+    glDrawBuffers(3, DrawBuffers);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         cout << "ERROR: Framebuffer shat itself!" << endl;
@@ -212,6 +206,7 @@ void display()
 {
     glm::mat4 view = glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f));
     glm::mat4 proj = glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f);
+    glm::vec4 skyCol = { 0.1f, 0.1f, 0.1f, 1.f };
 
     // set to render to the framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -252,19 +247,15 @@ void display()
 
     ssrShader.SetMatrix4x4("projection", proj);
     ssrShader.SetMatrix4x4("view", view);
-    ssrShader.SetFloat("maxDistance", 30.f);
-    ssrShader.SetFloat("resolution", 0.3f);
-    ssrShader.SetInt("steps", 5);
-    ssrShader.SetFloat("thickness", 0.5f);
+    ssrShader.SetFloat("maxThickness", 0.5f);
+    ssrShader.SetVector4("skyColor", skyCol);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTex);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, normalTex);
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, posTex);
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, specTex);
+    glBindTexture(GL_TEXTURE_2D, depthTex);
     
     ssrTri.Draw(ssrShader);
 }
