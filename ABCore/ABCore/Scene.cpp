@@ -208,7 +208,7 @@ bool Scene::RaycastTreeInternal(glm::vec3 origin, glm::vec3 dir, RaycastHit* hit
 
 vector<unsigned int> GetPrimitives(KDNode& node)
 {
-
+	return vector<unsigned int>();
 }
 
 void Scene::Render(Shader& shader)

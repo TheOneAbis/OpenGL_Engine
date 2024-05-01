@@ -1,7 +1,7 @@
 #version 450 core
 
 #define MAX_ITERATION 2000
-#define MAX_THICKNESS 0.001f
+#define MAX_THICKNESS 0.0001f
 
 // Texture samplers
 layout (binding = 0) uniform sampler2D colorTexture;
@@ -33,9 +33,8 @@ void main()
         vec4 posInVS = inverse(projection) * vec4(clipStart, 1);
         vec3 viewStart = posInVS.xyz / posInVS.w;
 
-        vec3 viewDir = normalize(viewStart);
-        vec3 viewEnd = viewStart + reflect(viewDir, normal) * 1000.f;
-        viewEnd /= (viewEnd.z < 0 ? viewEnd.z : 1);
+        vec3 viewEnd = viewStart + reflect(normalize(viewStart), normal) * 1000.f;
+        viewEnd /= (viewEnd.z > 0 ? viewEnd.z : 1);
         
         vec4 clipEnd = projection * vec4(viewEnd, 1);
         clipEnd.xyz /= clipEnd.w;
@@ -43,9 +42,9 @@ void main()
 
         // convert to texture space
         vec3 texStart = clipStart;
-        texStart.xy *= vec2(0.5f, -0.5f);
+        texStart.xy *= vec2(0.5f, 0.5f);
         texStart.xy += vec2(0.5f, 0.5f);
-        reflDir.xy *= vec2(0.5f, -0.5f);
+        reflDir.xy *= vec2(0.5f, 0.5f);
 
         // Calculate max distance before ray goes outside visible area
         float maxDist = reflDir.x >= 0 ? (1 - texStart.x) / reflDir.x : -texStart.x / reflDir.x;
@@ -84,7 +83,7 @@ void main()
         float intensity = hitIndex >= 0 ? 1.f : 0.f;
 
         // compute reflection vec if intersected
-        reflectionColor = mix(ambient, texture(colorTexture, intersection.xy), intensity);
+        reflectionColor = mix(ambient, texture(colorTexture, intersection.xy), intensity) * normalData.w;
     }
 
     // add reflection color to color of sample

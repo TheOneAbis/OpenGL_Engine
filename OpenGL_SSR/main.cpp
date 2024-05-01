@@ -64,36 +64,36 @@ void init()
     oldT = glfwGetTime();
 
     // set up shader
-    shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
-    ssrShader = Shader("../ABCore/Shaders/vert_screen.vert", "../ABCore/Shaders/frag_ssr.frag");
+    shader = Shader("./Shaders/vertex.vert", "./Shaders/frag_lit_pbr.frag");
+    ssrShader = Shader("./Shaders/vert_screen.vert", "./Shaders/frag_ssr.frag");
 
     // set up scene models
     Scene& scene = Scene::Get();
-    GameObject* firTree = scene.Add(GameObject("../Assets/Fir_Tree.fbx", "Fir Tree"));
+    GameObject* firTree = scene.Add(GameObject("./Assets/Fir_Tree.fbx", "Fir Tree"));
     firTree->SetWorldTM({ 1, 0, -2.f }, glm::quat({ 0, 0.7, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : firTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets/");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "./Assets/");
 
-    GameObject* poplarTree = scene.Add(GameObject("../Assets/Poplar_Tree.fbx", "Poplar Tree"));
+    GameObject* poplarTree = scene.Add(GameObject("./Assets/Poplar_Tree.fbx", "Poplar Tree"));
     poplarTree->SetWorldTM({ 4, 0, -2 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : poplarTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "./Assets");
 
-    GameObject* palmTree = scene.Add(GameObject("../Assets/Palm_Tree.fbx", "Palm Tree"));
+    GameObject* palmTree = scene.Add(GameObject("./Assets/Palm_Tree.fbx", "Palm Tree"));
     palmTree->SetWorldTM({ 5, 0, -4.5 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : palmTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "./Assets");
 
-    GameObject* oakTree = scene.Add(GameObject("../Assets/Oak_Tree.fbx", "Oak Tree"));
+    GameObject* oakTree = scene.Add(GameObject("./Assets/Oak_Tree.fbx", "Oak Tree"));
     oakTree->SetWorldTM({ 2.5, 0, -6 }, glm::quat({ 0, 0, 0 }), { 0.01, 0.01, 0.01 });
     for (Mesh& m : oakTree->GetMeshes())
-        m.AddTexture("texture_diffuse", "tree_diffuse.png", "../Assets");
+        m.AddTexture("texture_diffuse", "tree_diffuse.png", "./Assets");
 
     vector<int> indices = { 0, 1, 2, 0, 2, 3 };
-    GameObject* ground = scene.Add(GameObject("../Assets/Terrain.fbx", "Ground"));
+    GameObject* ground = scene.Add(GameObject("./Assets/Terrain.fbx", "Ground"));
     ground->SetWorldTM(Transform({ 40, -3, -42.5 }, glm::quat(), { 0.01, 0.01, 0.01 }));
     for (Mesh& m : ground->GetMeshes())
-        m.AddTexture("texture_diffuse", "forest_ground.png", "../Assets");
+        m.AddTexture("texture_diffuse", "forest_ground.png", "./Assets");
 
     GameObject* water = Scene::Get().Add(GameObject({ Mesh(
         {
@@ -106,7 +106,7 @@ void init()
         vector<Texture>()) }, "Floor"));
     water->SetWorldTM(Transform({ -7, -1.5f, 8 }, glm::quat(), { 25, 1, 25 }));
     water->GetMaterial().albedo = { 0.0f, 0.0f, 0.5f };
-    water->GetMaterial().roughness = 0.f;
+    water->GetMaterial().roughness = 0.5f;
 
     // set up lights
     Light point = {};
@@ -193,16 +193,18 @@ void Tick()
         camVel.z = 1.f;
     if (Input::Get().KeyDown(GLFW_KEY_D))
         camVel.x = 1.f;
-    if (Input::Get().KeyDown(GLFW_KEY_Q))
-        camVel.y = -1.f;
-    if (Input::Get().KeyDown(GLFW_KEY_E))
-        camVel.y = 1.f;
     if (Input::Get().KeyDown(GLFW_KEY_LEFT_SHIFT))
         speed *= 2.f;
 
     glm::vec3 t = glm::normalize(camVel);
     if (!isnan(t.x))
         camTM.Translate(t * camTM.GetRotation() * dt * speed);
+
+    if (Input::Get().KeyDown(GLFW_KEY_Q))
+        camVel.y = -1.f;
+    if (Input::Get().KeyDown(GLFW_KEY_E))
+        camVel.y = 1.f;
+    camTM.Translate({ 0, camVel.y * dt * speed, 0 });
 
     Input::Get().Update();
 }
