@@ -24,7 +24,7 @@ using namespace AB;
 
 // the window's width and height
 GLFWwindow* window;
-int width = 800, height = 800;
+int width = 1000, height = 1000;
 
 struct Light
 {
@@ -57,7 +57,6 @@ float aspect = (float)width / (float)height;
 float fov = glm::pi<float>() / 2.f;
 glm::vec3 ambient = glm::vec3(0.1f, 0.1f, 0.1f);
 glm::vec3 screenCol = glm::vec3(0.25f, 0.61f, 1.f);
-int recursionDepth = 5;
 float LMax = 500.f;
 
 GameObject* mFloor;
@@ -78,11 +77,10 @@ void init()
 
     // set up scene models
     // mirror sphere
-    //GameObject* smallSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx", "Mirror Sphere"));
-    //smallSphere->SetWorldTM({ -1.f, -0.35f, -2.f }, glm::quat(), { 0.5f, 0.5f, 0.5f });
-
-    GameObject* smallSphere = Scene::Get().Add(GameObject({ Mesh(0.5f) }, "Mirror Sphere"));
-    smallSphere->SetWorldTM({ -1.f, -0.35f, -2.f });
+    GameObject* smallSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx", "Mirror Sphere"));
+    smallSphere->SetWorldTM({ -1.f, -0.35f, -2.f }, glm::quat(), glm::vec3(0.5f));
+    //GameObject* smallSphere = Scene::Get().Add(GameObject({ Mesh(0.5f) }, "Mirror Sphere"));
+    //smallSphere->SetWorldTM({ -1.f, -0.35f, -2.f });
 
     smallSphere->GetMaterial().albedo = { 0.7f, 0.7f, 0.7f };
     smallSphere->GetMaterial().roughness = 0.f;
@@ -91,8 +89,11 @@ void init()
     smallSphere->GetMaterial().diffuse = 0.25f;
     
     // glass sphere
-    GameObject* bigSphere = Scene::Get().Add(GameObject({Mesh(0.75f)}, "Glass Sphere"));
-    bigSphere->SetWorldTM({ 0, 0, -1.5f });
+    GameObject* bigSphere = Scene::Get().Add(GameObject("../Assets/sphere.fbx", "Glass Sphere"));
+    bigSphere->SetWorldTM({ 0, 0, -1.5f }, glm::quat(), glm::vec3(0.75f));
+    //GameObject* bigSphere = Scene::Get().Add(GameObject({Mesh(0.75f)}, "Glass Sphere"));
+    //bigSphere->SetWorldTM({ 0, 0, -1.5f });
+
     bigSphere->GetMaterial().albedo = { 1, 1, 1 };
     bigSphere->GetMaterial().roughness = 0.8f;
     //bigSphere->GetMaterial().metallic = 0.5f;
@@ -100,6 +101,12 @@ void init()
     bigSphere->GetMaterial().reflectance = 0.01f;
     bigSphere->GetMaterial().diffuse = 0.075f;
     bigSphere->GetMaterial().refraction = 0.95f;
+
+    // cone (bonus)
+    /*GameObject* cone = Scene::Get().Add(GameObject("../Assets/cone.obj", "Cone"));
+    cone->SetWorldTM({1.f, 0.3f, -3.f});
+    cone->GetMaterial().albedo = { 0.3f, 1.f, 0.4f };
+    cone->GetMaterial().roughness = 0.5f;*/
     
     // floor
     mFloor = Scene::Get().Add(GameObject({ Mesh(
@@ -131,10 +138,13 @@ void init()
             for (auto& vert : mesh.vertices)
             {
                 vert.Position = glm::vec3(world * glm::vec4(vert.Position, 1));
-                vert.Normal = glm::inverse(glm::transpose(glm::mat3(world))) * vert.Normal;
+                vert.Normal = glm::normalize(glm::inverse(glm::transpose(glm::mat3(world))) * vert.Normal);
             }
         }
     }
+
+    // construct KD-tree
+    Scene::Get().CreateTree(1);
 
     glGenTextures(1, &viewportTex);
 }
@@ -274,9 +284,9 @@ glm::vec3 LocalIlluminate(glm::vec3 origin, RaycastHit hit)
     return hitColor;
 }
 
-glm::vec3 Raytrace(glm::vec3 origin, glm::vec3 dir, int depth, float incomingRefr)
+glm::vec3 Raytrace(glm::vec3 origin, glm::vec3 dir, int depth, int maxDepth, float incomingRefr)
 {
-    if (depth > recursionDepth)
+    if (depth > maxDepth)
         return glm::vec3(0, 0, 0);
     
     RaycastHit hit;
@@ -284,20 +294,20 @@ glm::vec3 Raytrace(glm::vec3 origin, glm::vec3 dir, int depth, float incomingRef
     {
         // Local illumination and shadow casting
         glm::vec3 lightColor = LocalIlluminate(origin, hit);
+        float refr = hit.gameObject->GetMaterial().refraction;
 
         // reflection
         float kr = hit.gameObject->GetMaterial().reflectance;
         if (kr > 0.001f)
         {
-            lightColor += kr * Raytrace(hit.position, glm::reflect(dir, hit.normal), depth + 1, hit.gameObject->GetMaterial().refraction);
+            lightColor += kr * Raytrace(hit.position, glm::reflect(dir, hit.normal), depth + 1, maxDepth, refr);
         }
 
         // refraction
         float kt = hit.gameObject->GetMaterial().transmissive;
         if (kt > 0.001f)
         {
-            float refr = hit.gameObject->GetMaterial().refraction;
-            lightColor += kt * Raytrace(hit.position, glm::refract(dir, hit.normal, incomingRefr / refr), depth + 1, refr);
+            lightColor += kt * Raytrace(hit.position, glm::refract(dir, hit.normal, incomingRefr / refr), depth + 1, maxDepth, refr);
         }
 
         return lightColor;
@@ -323,7 +333,7 @@ void CalculateRow(int y, float* rowNits, atomic<int>* counter)
         float yPercent = (float)y / (float)width * 2.f - 1.f;
         glm::vec3 dir = glm::normalize(glm::vec3(xPercent * fov * aspect, yPercent * fov, -1.f));
 
-        glm::vec3 result = Raytrace(camTM.GetTranslation(), dir, 0, 1);
+        glm::vec3 result = Raytrace(camTM.GetTranslation(), dir, 0, 5, 1);
         colorData[y * width + x] = result;
 
         // add log(l) to total
