@@ -143,8 +143,8 @@ void init()
         }
     }
 
-    // construct KD-tree
-    Scene::Get().CreateTree(1);
+    // construct KD-tree (if this isn't done, rays test against all primitives)
+    Scene::Get().CreateTree(12);
 
     glGenTextures(1, &viewportTex);
 }
@@ -323,7 +323,7 @@ inline float ToLuminance(glm::vec3 color)
     return 0.27f * color.r + 0.67f * color.g + 0.06f * color.b;
 }
 
-void CalculateRow(int y, float* rowNits, atomic<int>* counter)
+void CalculateRow(int y, float* rowNits, int* counter)
 {
     float totalNits = 0;
     for (int x = 0; x < width; x++)
@@ -341,8 +341,7 @@ void CalculateRow(int y, float* rowNits, atomic<int>* counter)
         totalNits += glm::log(FLT_EPSILON + l);
     }
     *rowNits = totalNits;
-    int current = counter->load();
-    counter->store(current + 1);
+    (*counter)++;
 }
 
 // called when the GL context need to be rendered
@@ -357,14 +356,14 @@ void display(void)
     float logavg = 0;
     
     // goofy multithreading to try and speed up this bs
-    atomic<int> counter = 0;
+    int counter = 0;
     for (int y = 0; y < height; y++)
     {
-        CalculateRow(y, &rowNits[y], &counter);
-        //threads.push_back(thread(CalculateRow, y, &rowNits[y], Lmax, &counter));
+        //CalculateRow(y, &rowNits[y], &counter);
+        threads.push_back(thread(CalculateRow, y, &rowNits[y], &counter));
     }
         
-    while (counter.load() < height)
+    while (counter < height)
         continue;
 
     // calculate log-average luminance

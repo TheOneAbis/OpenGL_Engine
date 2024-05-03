@@ -221,7 +221,7 @@ bool Scene::RaycastTreeInternal(KDNode* node, glm::vec3 origin, glm::vec3 dir, R
 	bool successful = false;
 	glm::vec3 dirInv = 1.f / dir;
 
-	// test ray vs AABB (using branchless algorithm from https://tavianator.com/2015/ray_box_nan.html)
+	// test ray vs AABB (using very cool branchless algorithm from https://tavianator.com/2015/ray_box_nan.html)
 	float t1 = (node->min.x - origin.x) * dirInv.x;
 	float t2 = (node->max.x - origin.x) * dirInv.x;
 
@@ -305,130 +305,110 @@ void Scene::CreateTree(int maxDepth)
 	root = CreateNode(allVerts, allIndices, 0, maxDepth);
 }
 
-bool AABBOverlapsAABB(glm::vec4 minA, glm::vec4 maxA, glm::vec4 minB, glm::vec4 maxB)
+bool PlaneOverlapsAABB(glm::vec3 normal, glm::vec3 vert, glm::vec3 maxbox)
 {
-	for (int i = 0; i < 3; i++)
+	glm::vec3 vmin, vmax;
+	for (int axis = 0; axis <= 2; axis++)
 	{
-		if (minA[i] > maxB[i] || minB[i] > maxA[i])
-			return false;
-	}
-	return true;
-}
-
-bool SphereOverlapsAABB(glm::vec3 c, float r, glm::vec3 minA, glm::vec3 maxA)
-{
-	float d = 0;
-	for (int i = 0; i < 3; i++)
-	{
-		float e;
-		if ((e = c[i] - minA[i]) < 0)
+		float v = vert[axis];
+		if (normal[axis] > 0.f)
 		{
-			if (e < -r) return false;
-			d += e * e;
-		}	
-		else if ((e = c[i] - maxA[i]) > 0)
+			vmin[axis] = -maxbox[axis] - v;
+			vmax[axis] = maxbox[axis] - v;
+		}
+		else
 		{
-			if (e > r) return false;
-			d += e * e;
+			vmin[axis] = maxbox[axis] - v;
+			vmax[axis] = -maxbox[axis] - v;
 		}
 	}
-	return d <= r * r;
+	if (glm::dot(normal, vmin) > 0.f) return false;
+	if (glm::dot(normal, vmax) >= 0.f) return true;
+	return false;
 }
 
-// Code adapted from https://omnigoat.github.io/2015/03/09/box-triangle-intersection/
-int TriOverlapsAABB(glm::vec4 boxMin, glm::vec4 boxMax, Vertex* triVerts[3])
+// Code adapted from https://fileadmin.cs.lth.se/cs/Personal/Tomas_Akenine-Moller/code/tribox3.txt
+// Of the 5 different algorithms I tried online, this was the only one that actually worked for some reason
+// probably because it's actually based off of the paper more
+bool TriOverlapsAABB(glm::vec3 boxMin, glm::vec3 boxMax, Vertex* triVerts[3])
 {
-	glm::vec4 v0 = glm::vec4(triVerts[0]->Position, 1);
-	glm::vec4 v1 = glm::vec4(triVerts[1]->Position, 1);
-	glm::vec4 v2 = glm::vec4(triVerts[2]->Position, 1);
-	glm::vec4 e0 = v1 - v0;
-	glm::vec4 e1 = v2 - v1;
-	glm::vec4 e2 = v0 - v2;
+	glm::vec3 boxcenter = (boxMin + boxMax) / 2.f;
+	glm::vec3 halfextents = (boxMax - boxMin) / 2.f;
 
-	glm::vec4 triMin = glm::min(glm::min(v0, v1), v2);
-	glm::vec4 triMax = glm::max(glm::max(v0, v1), v2);
+	glm::vec3 v0 = triVerts[0]->Position - boxcenter;
+	glm::vec3 v1 = triVerts[1]->Position - boxcenter;
+	glm::vec3 v2 = triVerts[2]->Position - boxcenter;
 
-	// First test AABBS before getting more complicated
-	if (!AABBOverlapsAABB(boxMin, boxMax, triMin, triMax))
-		return false;
+	glm::vec3 e0 = v1 - v0;
+	glm::vec3 e1 = v2 - v1;
+	glm::vec3 e2 = v0 - v2;
 
-	// triangle-normal
-	auto n = glm::vec4(glm::normalize(triVerts[0]->Normal + triVerts[1]->Normal + triVerts[2]->Normal), 0);
+	glm::vec3 triMin = glm::min(glm::min(v0, v1), v2);
+	glm::vec3 triMax = glm::max(glm::max(v0, v1), v2);
+	
+	float min, max;
 
-	// p & delta-p
-	auto p = boxMin;
-	auto dp = boxMax - p;
+	auto AxisTest_X01 = [&](float a, float b, float fa, float fb) -> bool
+		{
+			float p0 = a * v0.y - b * v0.z;
+			float p2 = a * v2.y - b * v2.z;
+			float rad = fa * halfextents.y + fb * halfextents.z;
+			return glm::min(p0, p2) <= rad && glm::max(p0, p2) >= -rad;
+		};
+	auto AxisTest_X2 = [&](float a, float b, float fa, float fb) -> bool
+		{
+			float p0 = a * v0.y - b * v0.z;
+			float p1 = a * v1.y - b * v1.z;
+			float rad = fa * halfextents.y + fb * halfextents.z;
+			return glm::min(p0, p1) <= rad && glm::max(p0, p1) >= -rad;
+		};
+	auto AxisTest_Y02 = [&](float a, float b, float fa, float fb) -> bool
+		{
+			float p0 = -a * v0.x + b * v0.z;
+			float p2 = -a * v2.x + b * v2.z;
+			float rad = fa * halfextents.x + fb * halfextents.z;
+			return glm::min(p0, p2) <= rad && glm::max(p0, p2) >= -rad;
+		};
+	auto AxisTest_Y1 = [&](float a, float b, float fa, float fb) -> bool
+		{
+			float p0 = -a * v0.x + b * v0.z;
+			float p1 = -a * v1.x + b * v1.z;
+			float rad = fa * halfextents.x + fb * halfextents.z;
+			return glm::min(p0, p1) <= rad && glm::max(p0, p1) >= -rad;
+		};
+	auto AxisTest_Z12 = [&](float a, float b, float fa, float fb) -> bool
+		{
+			float p1 = a * v1.x - b * v1.y;
+			float p2 = a * v2.x - b * v2.y;
+			float rad = fa * halfextents.x + fb * halfextents.y;
+			return glm::min(p1, p2) <= rad && glm::max(p1, p2) >= -rad;
+		};
+	auto AxisTest_Z0 = [&](float a, float b, float fa, float fb) -> bool
+		{
+			float p0 = a * v0.x - b * v0.y;
+			float p1 = a * v1.x - b * v1.y;
+			float rad = fa * halfextents.x + fb * halfextents.y;
+			return glm::min(p0, p1) <= rad && glm::max(p0, p1) >= -rad;
+		};
 
-	// test for triangle-plane/box overlap
-	auto c = glm::vec4(
-		n.x > 0.f ? dp.x : 0.f,
-		n.y > 0.f ? dp.y : 0.f,
-		n.z > 0.f ? dp.z : 0.f, 1.f);
+	if (!AxisTest_X01(e0.z, e0.y, glm::abs(e0.z), glm::abs(e0.y))) return false;
+	if (!AxisTest_Y02(e0.z, e0.x, glm::abs(e0.z), glm::abs(e0.x))) return false;
+	if (!AxisTest_Z12(e0.y, e0.x, glm::abs(e0.y), glm::abs(e0.x))) return false;
 
-	auto d1 = glm::dot(n, c - v0);
-	auto d2 = glm::dot(n, dp - c - v0);
+	if (!AxisTest_X01(e1.z, e1.y, glm::abs(e1.z), glm::abs(e1.y))) return false;
+	if (!AxisTest_Y02(e1.z, e1.x, glm::abs(e1.z), glm::abs(e1.x))) return false;
+	if (!AxisTest_Z0(e1.y, e1.x, glm::abs(e1.y), glm::abs(e1.x))) return false;
 
-	if ((glm::dot(n, p) + d1) * (glm::dot(n, p) + d2) > 0.f)
-		return false;
+	if (!AxisTest_X2(e2.z, e2.y, glm::abs(e2.z), glm::abs(e2.y))) return false;
+	if (!AxisTest_Y1(e2.z, e2.x, glm::abs(e2.z), glm::abs(e2.x))) return false;
+	if (!AxisTest_Z12(e2.y, e2.x, glm::abs(e2.y), glm::abs(e2.x))) return false;
 
-	// xy-plane projection-overlap
-	auto xym = (n.z < 0.f ? -1.f : 1.f);
-	auto ne0xy = glm::vec4(-e0.y, e0.x, 0.f, 0.f) * xym;
-	auto ne1xy = glm::vec4(-e1.y, e1.x, 0.f, 0.f) * xym;
-	auto ne2xy = glm::vec4(-e2.y, e2.x, 0.f, 0.f) * xym;
+	// test in xyz directions
+	for (int i = 0; i < 3; i++)
+		if (triMin[i] > halfextents[i] || triMax[i] < -halfextents[i]) return false;
 
-	auto v0xy = glm::vec4(v0.x, v0.y, 0.f, 0.f);
-	auto v1xy = glm::vec4(v1.x, v1.y, 0.f, 0.f);
-	auto v2xy = glm::vec4(v2.x, v2.y, 0.f, 0.f);
-
-	float de0xy = -glm::dot(ne0xy, v0xy) + glm::max(0.f, dp.x * ne0xy.x) + glm::max(0.f, dp.y * ne0xy.y);
-	float de1xy = -glm::dot(ne1xy, v1xy) + glm::max(0.f, dp.x * ne1xy.x) + glm::max(0.f, dp.y * ne1xy.y);
-	float de2xy = -glm::dot(ne2xy, v2xy) + glm::max(0.f, dp.x * ne2xy.x) + glm::max(0.f, dp.y * ne2xy.y);
-
-	auto pxy = glm::vec4(p.x, p.y, 0.f, 0.f);
-
-	if ((glm::dot(ne0xy, pxy) + de0xy) < 0.f || (glm::dot(ne1xy, pxy) + de1xy) < 0.f || (glm::dot(ne2xy, pxy) + de2xy) < 0.f)
-		return false;
-
-	// yz-plane projection overlap
-	auto yzm = (n.x < 0.f ? -1.f : 1.f);
-	auto ne0yz = glm::vec4(-e0.z, e0.y, 0.f, 0.f) * yzm;
-	auto ne1yz = glm::vec4(-e1.z, e1.y, 0.f, 0.f) * yzm;
-	auto ne2yz = glm::vec4(-e2.z, e2.y, 0.f, 0.f) * yzm;
-
-	auto v0yz = glm::vec4(v0.y, v0.z, 0.f, 0.f);
-	auto v1yz = glm::vec4(v1.y, v1.z, 0.f, 0.f);
-	auto v2yz = glm::vec4(v2.y, v2.z, 0.f, 0.f);
-
-	float de0yz = -glm::dot(ne0yz, v0yz) + glm::max(0.f, dp.y * ne0yz.x) + glm::max(0.f, dp.z * ne0yz.y);
-	float de1yz = -glm::dot(ne1yz, v1yz) + glm::max(0.f, dp.y * ne1yz.x) + glm::max(0.f, dp.z * ne1yz.y);
-	float de2yz = -glm::dot(ne2yz, v2yz) + glm::max(0.f, dp.y * ne2yz.x) + glm::max(0.f, dp.z * ne2yz.y);
-
-	auto pyz = glm::vec4(p.y, p.z, 0.f, 0.f);
-
-	if ((glm::dot(ne0yz, pyz) + de0yz) < 0.f || (glm::dot(ne1yz, pyz) + de1yz) < 0.f || (glm::dot(ne2yz, pyz) + de2yz) < 0.f)
-		return false;
-
-	// zx-plane projection overlap
-	auto zxm = (n.y < 0.f ? -1.f : 1.f);
-	auto ne0zx = glm::vec4(-e0.x, e0.z, 0.f, 0.f) * zxm;
-	auto ne1zx = glm::vec4(-e1.x, e1.z, 0.f, 0.f) * zxm;
-	auto ne2zx = glm::vec4(-e2.x, e2.z, 0.f, 0.f) * zxm;
-
-	auto v0zx = glm::vec4(v0.z, v0.x, 0.f, 0.f);
-	auto v1zx = glm::vec4(v1.z, v1.x, 0.f, 0.f);
-	auto v2zx = glm::vec4(v2.z, v2.x, 0.f, 0.f);
-
-	float de0zx = -glm::dot(ne0zx, v0zx) + glm::max(0.f, dp.y * ne0zx.x) + glm::max(0.f, dp.z * ne0zx.y);
-	float de1zx = -glm::dot(ne1zx, v1zx) + glm::max(0.f, dp.y * ne1zx.x) + glm::max(0.f, dp.z * ne1zx.y);
-	float de2zx = -glm::dot(ne2zx, v2zx) + glm::max(0.f, dp.y * ne2zx.x) + glm::max(0.f, dp.z * ne2zx.y);
-
-	auto pzx = glm::vec4(p.z, p.x, 0.f, 0.f);
-
-	if ((glm::dot(ne0zx, pzx) + de0zx) < 0.f || (glm::dot(ne1zx, pzx) + de1zx) < 0.f || (glm::dot(ne2zx, pzx) + de2zx) < 0.f)
-		return false;
-
-	return true;
+	// test against normal
+	return PlaneOverlapsAABB(glm::cross(e0, e1), v0, halfextents);
 }
 
 KDNode* CreateNode(vector<Vertex*> allVerts, IndexObjList indices, int depth, int maxDepth)
@@ -489,13 +469,13 @@ KDNode* CreateNode(vector<Vertex*> allVerts, IndexObjList indices, int depth, in
 			allVerts[indices[i + 1].second],
 			allVerts[indices[i + 2].second]
 		};
-		if (TriOverlapsAABB(glm::vec4(leftMin, 1), glm::vec4(leftMax, 1), tri))
+		if (TriOverlapsAABB(leftMin, leftMax, tri))
 		{
 			leftIndices.push_back(indices[i + 0]);
 			leftIndices.push_back(indices[i + 1]);
 			leftIndices.push_back(indices[i + 2]);
 		}
-		if (TriOverlapsAABB(glm::vec4(rightMin, 1), glm::vec4(rightMax, 1), tri))
+		if (TriOverlapsAABB(rightMin, rightMax, tri))
 		{
 			rightIndices.push_back(indices[i + 0]);
 			rightIndices.push_back(indices[i + 1]);
