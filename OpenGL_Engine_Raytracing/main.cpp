@@ -435,7 +435,10 @@ int main(int argc, char* argv[])
     init();
 
     // Main Loop
+    float startTime = glfwGetTime();
     display();
+    cout << "Time to render image: " << glfwGetTime() - startTime << " seconds" << endl;
+
     glfwSwapBuffers(window);
     while (!glfwWindowShouldClose(window))
     {
