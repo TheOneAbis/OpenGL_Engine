@@ -1,6 +1,8 @@
 #pragma comment(lib, "ABCore.lib")
 
 #include <GL/glew.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 // GLM math library
 #define GLM_FORCE_RADIANS
@@ -10,69 +12,55 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/constants.hpp>
 
-#ifdef __APPLE__
-#include <GLUT/glut.h> // include glut for Mac
-#else
-#include <GL/freeglut.h> //include glut for Windows
-#endif
+#include <GLFW/glfw3.h>
 
 #include <iostream>
-#include <ABCore/GameObject.h>
+#include <ABCore/Scene.h>
 #include <ABCore/Input.h>
 
 using namespace std;
 using namespace AB;
 
+struct Patch
+{
+    Vertex verts[6];
+    glm::vec3 normal;
+    glm::vec3 center;
+    glm::mat4 views[5];
+    glm::vec3 emmision, incident, excident, reflectance;
+    glm::vec3 finalCol;
+    vector<Patch*> adjacents;
+    char id[3];
+    unordered_map<Patch*, float> formFactors;
+};
+
 // the window's width and height
 int width = 1280, height = 720;
 
-struct Light
-{
-    unsigned int Type;
-    glm::vec3 Direction;
-    float Range;
-    glm::vec3 Position;
-    float Intensity;
-    glm::vec3 Color;
-    float SpotFalloff;
-};
-
-enum LightType : int
-{
-    LIGHT_TYPE_DIRECTIONAL,
-    LIGHT_TYPE_POINT,
-    LIGHT_TYPE_SPOT
-};
-
-vector<Light> lights;
 Shader shader;
-std::vector<GameObject> gameObjects;
 
 Transform camTM;
 glm::vec2 camEulers;
 float dt, oldT;
+float camSpeed = 3.f;
 
 void init()
 {
+    stbi_set_flip_vertically_on_load(true);
+
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
 
-    oldT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+    oldT = glfwGetTime();
 
     // set up shader
     shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
 
-    // set up scene models
-    gameObjects.push_back(GameObject("../Assets/cube.obj", "TallCube"));
-    gameObjects.back().SetWorldTM({ -0.2, 0, -3.f }, glm::quat({0, 0.7, 0}), { 0.5, 1, 0.5 });
-    gameObjects.back().GetMaterial().roughness = 0.4f;
+    // set up scene model
+    GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
+    scene->SetWorldTM({3, -2.5f, -2}, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
 
-    gameObjects.push_back(GameObject("../Assets/cube.obj", "YellowCube"));
-    gameObjects.back().SetWorldTM({ 1.3, -0.5, -3.f }, glm::quat(), { 0.5, 0.5, 0.5 });
-    gameObjects.back().GetMaterial().albedo = { 1, 1, 0 };
-    gameObjects.back().GetMaterial().roughness = 0.3f;
-
-    // WALLS
+    // light plane
     vector<Mesh> plane = { Mesh(
         {
             { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
@@ -82,75 +70,49 @@ void init()
         },
         { 0, 1, 2, 0, 2, 3 },
         vector<Texture>()) };
+    GameObject* lightPlane = Scene::Get().Add(GameObject(plane, "Light Plane"));
+    lightPlane->SetWorldTM(Transform({ 0.9, 2.97, -4.1 }, glm::quat({ 0, 0, glm::pi<float>() }), glm::vec3(1.4)));
+    lightPlane->GetMaterial().emissive = 1;
 
-    vector<int> indices = { 0, 1, 2, 0, 2, 3 };
-    gameObjects.push_back(GameObject(plane, "Floor"));
-    gameObjects.back().SetWorldTM(Transform({ -1, -1, -1 }, glm::quat(), { 3, 1, 3 }));
 
-    gameObjects.push_back(GameObject(plane, "Ceiling"));
-    gameObjects.back().SetWorldTM(Transform({ 2, 2, -1 }, glm::quat({ 0, 0, glm::pi<float>() }), { 3, 1, 3 }));
-
-    gameObjects.push_back(GameObject(plane, "BackWall"));
-    gameObjects.back().SetWorldTM(Transform({ -1, -1, -4 }, glm::quat({ glm::pi<float>() / 2.f, 0, 0 }), {3, 1, 3}));
-
-    gameObjects.push_back(GameObject(plane, "FrontWall"));
-    gameObjects.back().SetWorldTM(Transform({ -1, 2, -1 }, glm::quat({ -glm::pi<float>() / 2.f, 0, 0 }), { 3, 1, 3 }));
-
-    gameObjects.push_back(GameObject(plane, "LeftWall"));
-    gameObjects.back().SetWorldTM(Transform({ -1, 2, -1 }, glm::quat({ 0, 0, -glm::pi<float>() / 2.f }), {3, 1, 3}));
-    gameObjects.back().GetMaterial().albedo = { 0, 0, 1 };
-
-    gameObjects.push_back(GameObject(plane, "RightWall"));
-    gameObjects.back().SetWorldTM(Transform({ 2, -1, -1 }, glm::quat({ 0, 0, glm::pi<float>() / 2.f }), { 3, 1, 3 }));
-    gameObjects.back().GetMaterial().albedo = { 1, 0, 0 };
-
-    gameObjects.push_back(GameObject(plane, "LightPlane"));
-    gameObjects.back().SetWorldTM(Transform({ 0.75, 1.95, -2.25 }, glm::quat({ 0, 0, glm::pi<float>() }), { 0.5, 0.5, 0.5 }));
-    gameObjects.back().GetMaterial().emissive = 1;
-
-    // set up lights
-    Light point = {};
-    point.Type = LIGHT_TYPE_POINT;
-    point.Color = glm::vec3(1, 1, 1);
-    point.Intensity = 1.5;
-    point.Position = glm::vec3(0.5, 2, -2.5);
-    point.Range = 4;
-    lights.push_back(point);
 }
 
 void Tick()
 {
-    float newT = glutGet(GLUT_ELAPSED_TIME) / 1000.f;
+    float newT = glfwGetTime();
     dt = newT - oldT;
     oldT = newT;
 
-    if (Input::Get().MouseButtonDown(2))
+    if (Input::Get().MouseButtonDown(GLFW_MOUSE_BUTTON_2))
     {
         camEulers += Input::Get().GetMouseDelta();
         camTM.SetRotationEulersZYX(glm::vec3(camEulers.y * 0.0025f, camEulers.x * 0.0025f, 0.f));
     }
 
     glm::vec3 camVel = {};
-    if (Input::Get().KeyDown('w'))
+    float speed = camSpeed;
+    if (Input::Get().KeyDown(GLFW_KEY_W))
         camVel.z = -1.f;
-    if (Input::Get().KeyDown('a'))
+    if (Input::Get().KeyDown(GLFW_KEY_A))
         camVel.x = -1.f;
-    if (Input::Get().KeyDown('s'))
+    if (Input::Get().KeyDown(GLFW_KEY_S))
         camVel.z = 1.f;
-    if (Input::Get().KeyDown('d'))
+    if (Input::Get().KeyDown(GLFW_KEY_D))
         camVel.x = 1.f;
-    if (Input::Get().KeyDown('q'))
-        camVel.y = -1.f;
-    if (Input::Get().KeyDown('e'))
-        camVel.y = 1.f;
+    if (Input::Get().KeyDown(GLFW_KEY_LEFT_SHIFT))
+        speed *= 2.f;
 
     glm::vec3 t = glm::normalize(camVel);
     if (!isnan(t.x))
-        camTM.Translate(t * camTM.GetRotation() * dt * 3.f);
+        camTM.Translate(t * camTM.GetRotation() * dt * speed);
+
+    if (Input::Get().KeyDown(GLFW_KEY_Q))
+        camVel.y = -1.f;
+    if (Input::Get().KeyDown(GLFW_KEY_E))
+        camVel.y = 1.f;
+    camTM.Translate({ 0, camVel.y * dt * speed, 0 });
 
     Input::Get().Update();
-
-    glutPostRedisplay();
 }
 
 // called when the GL context need to be rendered
@@ -170,28 +132,11 @@ void display(void)
     shader.SetVector3("cameraPosition", camTM.GetTranslation());
     shader.SetVector3("ambient", glm::vec3(0.0f, 0.0f, 0.0f));
 
-    // Lighting uniform data
-    for (unsigned int i = 0; i < lights.size(); i++)
-    {
-        shader.SetUint("lights[" + to_string(i) + "].Type", lights[i].Type);
-        shader.SetVector3("lights[" + to_string(i) + "].Direction", lights[i].Direction);
-        shader.SetFloat("lights[" + to_string(i) + "].Range", lights[i].Range);
-        shader.SetVector3("lights[" + to_string(i) + "].Position", lights[i].Position);
-        shader.SetFloat("lights[" + to_string(i) + "].Intensity", lights[i].Intensity);
-        shader.SetVector3("lights[" + to_string(i) + "].Color", lights[i].Color);
-        shader.SetFloat("lights[" + to_string(i) + "].SpotFalloff", lights[i].SpotFalloff);
-    }
-
-    for (auto& obj : gameObjects)
-    {
-        obj.Draw(shader);
-    }
-
-    glutSwapBuffers();
+    Scene::Get().Render(shader);
 }
 
 // called when window is first created or when window is resized
-void reshape(int w, int h)
+void reshape(GLFWwindow* window, int w, int h)
 {
     // update thescreen dimensions
     width = w;
@@ -199,23 +144,31 @@ void reshape(int w, int h)
 
     /* tell OpenGL to use the whole window for drawing */
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
-
-    glutPostRedisplay();
 }
 
 int main(int argc, char* argv[])
 {
-    //initialize GLUT
-    glutInit(&argc, argv);
+    // initialize GLFW
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // double bufferred
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
 
-    //set the initial window size
-    glutInitWindowSize((int)width, (int)height);
-
-    // create the window with a title
-    glutCreateWindow("Radiosity");
+    // initialize GLEW
+    glewExperimental = GL_TRUE;
+    GLFWwindow* window = glfwCreateWindow(width, height, "Screen Space Reflections", NULL, NULL);
+    if (window == NULL)
+    {
+        cout << "Failed to create GLFW window" << endl;
+        glfwTerminate();
+        return -1;
+    }
+    glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, reshape);
 
     GLenum err = glewInit();
     if (GLEW_OK != err)
@@ -225,23 +178,20 @@ int main(int argc, char* argv[])
     }
     fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 
+    // initialize everything else
     init();
+    Input::Get().Init(window);
 
-    /* --- register callbacks with GLUT --- */
+    // Main Loop
+    while (!glfwWindowShouldClose(window))
+    {
+        Tick();
+        display();
 
-    //register function to handle window resizes
-    glutReshapeFunc(reshape);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
 
-    //register function that draws in the window
-    glutDisplayFunc(display);
-
-    glutIdleFunc(Tick);
-
-    // Processing input
-    Input::Get().Init();
-
-    //start the glut main loop
-    glutMainLoop();
-
+    glfwTerminate();
     return 0;
 }
