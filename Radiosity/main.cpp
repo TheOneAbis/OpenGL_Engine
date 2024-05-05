@@ -1,8 +1,27 @@
+// --------------------------------------------------------------------------------------------------- \\
+//                                                                                                     \\
+//                            ================ RADIOSITY =================                             \\
+//                                                                                                     \\
+// --------------------------------------------------------------------------------------------------- \\
+//                                                                                                     \\
+// My implementation of radiosity works as follows:                                                    \\
+//                                                                                                     \\
+// 1. Before the first iteration, add all patches' emissions to their final color.                     \\
+// 2. At the beginning of an iteration, all patches emit their "emission" light to all other patches.  \\
+// 3. At the end of an iteration, the emission of all patches is set to (0,0,0).                       \\
+// 4. Resulting exitance from that iteration becomes the patch's new emission for the next iteration.  \\
+// 5. This exitance is also added to that patch's final color.                                         \\
+// 6. The exitences are all set to (0,0,0) for the next iteration.                                     \\
+// 7. Repeat from step 2 for as many iterations as you want.                                           \\
+//                                                                                                     \\
+// --------------------------------------------------------------------------------------------------- \\
+
 #pragma comment(lib, "ABCore.lib")
 
 #include <GL/glew.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
 
 // GLM math library
 #define GLM_FORCE_RADIANS
@@ -23,14 +42,26 @@ using namespace AB;
 
 struct Patch
 {
-    Vertex verts[6];
+    Mesh mesh;
     glm::vec3 normal;
     glm::vec3 center;
     glm::mat4 views[5];
-    glm::vec3 emmision, incident, excident, reflectance;
-    glm::vec3 finalCol;
+    
+    // light emitted from this patch. 
+    glm::vec3 emission; 
+    // incoming light from other patches i, which is sum of emission(i) * ffs(ij) * (A(i)/A(j))
+    glm::vec3 incident;
+    // exiting light; incident * reflectance
+    glm::vec3 exident;
+    // essentially the patch's base color.
+    glm::vec3 reflectance = glm::vec3(1);
+    // the final color to display at the end of all iterations
+    glm::vec3 finalColor;
+
     vector<Patch*> adjacents;
     char id[3];
+
+    // maps each other patch in the scene to their form factors
     unordered_map<Patch*, float> formFactors;
 };
 
@@ -38,11 +69,46 @@ struct Patch
 int width = 1280, height = 720;
 
 Shader shader;
+vector<Patch> patches;
 
 Transform camTM;
 glm::vec2 camEulers;
 float dt, oldT;
 float camSpeed = 3.f;
+
+Patch CreatePatch(glm::vec3 positions[4], glm::vec3 emission)
+{
+    Patch p = {};
+
+    // normal
+    p.normal = glm::normalize(glm::cross(positions[1] - positions[0], positions[2] - positions[1]));
+
+    // center
+    for (int i = 0; i < 4; i++)
+        p.center += positions[i];
+    p.center /= 4.f;
+
+    // mesh
+    p.mesh = Mesh(
+        vector<Vertex>({ 
+            { positions[0], p.normal, { 0, 1 } },
+            { positions[1], p.normal, { 1, 1 } }, 
+            { positions[2], p.normal, { 1, 0 } }, 
+            { positions[3], p.normal, { 0, 0 } }
+        }), 
+        vector<unsigned int>({ 0, 1, 2, 0, 2, 3 }), 
+        vector<Texture>());
+
+    // views
+    p.views[0] = glm::lookAt(p.center, p.center + p.normal, glm::vec3(p.normal.y, -p.normal.x, p.normal.z));
+    p.views[1] = glm::lookAt(p.center, p.center + glm::vec3(p.normal.y, -p.normal.x, p.normal.z), p.normal);
+    p.views[2] = glm::lookAt(p.center, p.center + glm::vec3(-p.normal.y, p.normal.x, p.normal.z), p.normal);
+    p.views[3] = glm::lookAt(p.center, p.center + glm::vec3(p.normal.x, p.normal.z, -p.normal.y), p.normal);
+    p.views[4] = glm::lookAt(p.center, p.center + glm::vec3(p.normal.x, -p.normal.z, p.normal.y), p.normal);
+
+    p.emission = emission;
+    return p;
+}
 
 void init()
 {
@@ -56,25 +122,37 @@ void init()
     // set up shader
     shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
 
+    // light patch
+    glm::vec3 lightV[4] =
+    {
+        glm::vec3(0.9f, 2.97f, -4.1f),
+        glm::vec3(-0.5f, 2.97f, -4.1f),
+        glm::vec3(-0.5f, 2.97f, -5.5f),
+        glm::vec3(0.9f, 2.97f, -5.5f)
+    };
+    patches.push_back(CreatePatch(lightV, glm::vec3(1)));
+
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
-    scene->SetWorldTM({3, -2.5f, -2}, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
+    scene->SetWorldTM({ 3, -2.5f, -2 }, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
 
-    // light plane
-    vector<Mesh> plane = { Mesh(
+    // Patch generation
+    glm::mat4 world = scene->GetWorldTM().GetMatrix();
+    for (Mesh& m : scene->GetMeshes())
+    {
+        for (int i = 0; i < m.indices.size(); i += 6)
         {
-            { glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 0.f) },
-            { glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 0.f) },
-            { glm::vec3(1.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(1.f, 1.f) },
-            { glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f), glm::vec2(0.f, 1.f) }
-        },
-        { 0, 1, 2, 0, 2, 3 },
-        vector<Texture>()) };
-    GameObject* lightPlane = Scene::Get().Add(GameObject(plane, "Light Plane"));
-    lightPlane->SetWorldTM(Transform({ 0.9, 2.97, -4.1 }, glm::quat({ 0, 0, glm::pi<float>() }), glm::vec3(1.4)));
-    lightPlane->GetMaterial().emissive = 1;
-
-
+            // every 6 indices = 0, 1, 2, 0, 2, 3, so just use 0, 1, 2, and 5 to get the 4 verts
+            glm::vec3 verts[4] =
+            {
+                glm::vec3(world * glm::vec4(m.vertices[m.indices[i + 0]].Position, 1)),
+                glm::vec3(world * glm::vec4(m.vertices[m.indices[i + 1]].Position, 1)),
+                glm::vec3(world * glm::vec4(m.vertices[m.indices[i + 2]].Position, 1)),
+                glm::vec3(world * glm::vec4(m.vertices[m.indices[i + 5]].Position, 1))
+            };
+            patches.push_back(CreatePatch(verts, glm::vec3(0)));
+        }
+    }
 }
 
 void Tick()
@@ -130,9 +208,24 @@ void display(void)
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
     shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
     shader.SetVector3("cameraPosition", camTM.GetTranslation());
-    shader.SetVector3("ambient", glm::vec3(0.0f, 0.0f, 0.0f));
 
-    Scene::Get().Render(shader);
+    shader.SetUint("lights[0].Type", 1u);
+    shader.SetVector3("lights[0].Direction", glm::vec3());
+    shader.SetFloat("lights[0].Range", 8.f);
+    shader.SetVector3("lights[0].Position", glm::vec3(0.25, 2, -4.75));
+    shader.SetFloat("lights[0].Intensity", 1.f);
+    shader.SetVector3("lights[0].Color", glm::vec3(1));
+
+    shader.SetMatrix4x4("world", glm::mat4());
+    shader.SetVector3("albedoColor", glm::vec3(1)); // the base color
+
+    for (Patch& p : patches)
+    {
+        shader.SetVector3("ambient", p.finalColor);
+        shader.SetFloat("metallic", 0); // not used
+        shader.SetFloat("roughness", 1); // not used
+        p.mesh.Draw(shader);
+    }
 }
 
 // called when window is first created or when window is resized

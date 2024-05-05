@@ -150,7 +150,7 @@ in vec2 texCoord;
 uniform vec3 albedoColor;
 uniform float roughness;
 uniform float metallic;
-uniform float emissive;
+uniform vec3 emissive;
 uniform vec3 ambient;
 
 uniform vec3 cameraPosition;
@@ -171,7 +171,7 @@ void main()
     vec3 specularColor = mix(vec3(NONMETAL_F0, NONMETAL_F0, NONMETAL_F0), baseColor, metallic);
 
     vec3 totalLightColor = ambient * baseColor * (1 - metallic);
-    totalLightColor += emissive.xxx;
+    totalLightColor += emissive;
 
     // Loop through the lights
     for (uint i = 0u; i < MAX_LIGHT_COUNT; i++)
