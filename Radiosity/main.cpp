@@ -34,6 +34,8 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <sstream>
+
 #include <ABCore/Scene.h>
 #include <ABCore/Input.h>
 
@@ -51,15 +53,13 @@ struct Patch
     glm::vec3 emission; 
     // incoming light from other patches i, which is sum of emission(i) * ffs(ij) * (A(i)/A(j))
     glm::vec3 incident;
-    // exiting light; incident * reflectance
-    glm::vec3 exident;
     // essentially the patch's base color.
     glm::vec3 reflectance = glm::vec3(1);
     // the final color to display at the end of all iterations
     glm::vec3 finalColor;
 
     vector<Patch*> adjacents;
-    char id[3];
+    float area;
 
     // maps each other patch in the scene to their form factors
     unordered_map<Patch*, float> formFactors;
@@ -70,6 +70,7 @@ int width = 1280, height = 720;
 
 Shader shader;
 vector<Patch> patches;
+GLFWwindow* window;
 
 Transform camTM;
 glm::vec2 camEulers;
@@ -79,9 +80,13 @@ float camSpeed = 3.f;
 Patch CreatePatch(glm::vec3 positions[4], glm::vec3 emission)
 {
     Patch p = {};
+    glm::vec3 v0 = positions[1] - positions[0];
+    glm::vec3 v1 = positions[2] - positions[1];
+    glm::vec3 v2 = positions[3] - positions[2];
+    glm::vec3 v3 = positions[0] - positions[3];
 
     // normal
-    p.normal = glm::normalize(glm::cross(positions[1] - positions[0], positions[2] - positions[1]));
+    p.normal = glm::normalize(glm::cross(v0, v1));
 
     // center
     for (int i = 0; i < 4; i++)
@@ -106,8 +111,105 @@ Patch CreatePatch(glm::vec3 positions[4], glm::vec3 emission)
     p.views[3] = glm::lookAt(p.center, p.center + glm::vec3(p.normal.x, p.normal.z, -p.normal.y), p.normal);
     p.views[4] = glm::lookAt(p.center, p.center + glm::vec3(p.normal.x, -p.normal.z, p.normal.y), p.normal);
 
+    // cross(tri1) / 2 + cross(tri2) / 2
+    p.area = glm::length(glm::cross(v0, v1)) / 2.f + glm::length(glm::cross(v2, v3)) / 2.f;
+
     p.emission = emission;
     return p;
+}
+
+void Bake(int iterations, int hemicubeSize)
+{
+    glReadBuffer(GL_BACK); // glReadPixels should read from backbuffer
+    glViewport(0, 0, hemicubeSize, hemicubeSize);
+
+    shader.use();
+    shader.SetMatrix4x4("projection", glm::perspective(glm::radians(45.f), 1.f, 0.1f, 100.f));
+    shader.SetMatrix4x4("world", glm::mat4());
+    shader.SetInt("size", hemicubeSize);
+
+    // determine form factors first (viewability of each patch doesn't change between iterations, so just need to do this once)
+    for (int i = 0; i < patches.size(); i++)
+    {
+        Patch& pi = patches[i];
+        cout << "Calculating form factors for patch " << i << "..." << endl;
+
+        for (Patch& pj : patches)
+        {
+            if (&pj == &pi) continue;
+
+            // render the whole scene, where pj is white and everything else is black
+            // push out the patch just a tiny bit to prevent z - fighting w/ the
+            // actual scene mesh when projecting onto hemicubes
+            for (int i = 0; i < 3; i++)
+                pj.mesh.vertices[i].Position += pj.normal * 0.01f;
+
+            // project pj onto each side of the hemicube
+            for (int viewI = 0; viewI < 5; viewI++)
+            {
+                glClearColor(0.f, 0.f, 0.f, 0.f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                // for side views, the bottom half ends up under the patch, so render top half only
+                shader.SetBool("topHalf", viewI != 0); 
+                shader.SetMatrix4x4("view", pi.views[viewI]);
+                shader.SetVector3("albedoColor", glm::vec3(1));
+
+                pj.mesh.Draw(shader);
+                Scene::Get().Render(shader);
+
+                glm::vec4* colors = new glm::vec4[hemicubeSize * hemicubeSize];
+                glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGBA, GL_FLOAT, colors);
+
+                // read the resulting pixels to get total form factor
+                float f = 0;
+                for (int j = 0; j < hemicubeSize; j++)
+                {
+                    for (int i = 0; i < hemicubeSize; i++)
+                    {
+                        // i,j = 0,0 should correspond to x,y = -1,-1, since pixel 0,0 is the bottom-left corner of the screen... probably
+                        float x = (float)i / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
+                        float y = (float)j / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
+
+                        float dF = ((viewI == 0 ? 1.f : glm::max(y, 0.f)) / (float)(hemicubeSize * hemicubeSize)) /
+                            (glm::pi<float>() * glm::pow((1.f + x * x + y * y), 2.f));
+
+                        f += dF * colors[j * hemicubeSize + i].x;
+                    }
+                }
+                pi.formFactors[&pj] += f;
+                delete[] colors;
+            }
+
+            for (int i = 0; i < 3; i++)
+                pj.mesh.vertices[i].Position -= pj.normal * 0.01f;
+        }
+        pi.finalColor = pi.emission;
+    }
+
+    // do the actual radiosity thing
+    for (int i = 0; i < iterations; i++)
+    {
+        // Send flux from each patch to each other patch
+        for (Patch& pi : patches)
+        {
+            for (auto& pair : pi.formFactors)
+            {
+                Patch& pj = *pair.first;
+                float fij = pair.second;
+                pj.incident += pi.emission * pj.reflectance * fij * (pi.area / pj.area);
+            }
+        }
+
+        // Set each patch to emit their resulting exident light (incident * reflectance) for next iteration.
+        // also add this exident light to their final color.
+        for (Patch& p : patches)
+        {
+            p.emission = p.incident;
+            p.finalColor += p.incident;
+            p.incident = glm::vec3(0); // reset for next iteration
+        }
+    }
+    glViewport(0, 0, (GLsizei)width, (GLsizei)height);
 }
 
 void init()
@@ -120,7 +222,7 @@ void init()
     oldT = glfwGetTime();
 
     // set up shader
-    shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_lit_pbr.frag");
+    shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_unlit.frag");
 
     // light patch
     glm::vec3 lightV[4] =
@@ -135,6 +237,7 @@ void init()
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
     scene->SetWorldTM({ 3, -2.5f, -2 }, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
+    scene->GetMaterial().albedo = glm::vec3(0);
 
     // Patch generation
     glm::mat4 world = scene->GetWorldTM().GetMatrix();
@@ -153,6 +256,7 @@ void init()
             patches.push_back(CreatePatch(verts, glm::vec3(0)));
         }
     }
+    Bake(1, 8);
 }
 
 void Tick()
@@ -160,6 +264,11 @@ void Tick()
     float newT = glfwGetTime();
     dt = newT - oldT;
     oldT = newT;
+
+    // display FPS
+    stringstream ss;
+    ss << "Radiosity" << " [" << 1.f / dt << " FPS]";
+    glfwSetWindowTitle(window, ss.str().c_str());
 
     if (Input::Get().MouseButtonDown(GLFW_MOUSE_BUTTON_2))
     {
@@ -207,23 +316,12 @@ void display(void)
 
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
     shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
-    shader.SetVector3("cameraPosition", camTM.GetTranslation());
-
-    shader.SetUint("lights[0].Type", 1u);
-    shader.SetVector3("lights[0].Direction", glm::vec3());
-    shader.SetFloat("lights[0].Range", 8.f);
-    shader.SetVector3("lights[0].Position", glm::vec3(0.25, 2, -4.75));
-    shader.SetFloat("lights[0].Intensity", 1.f);
-    shader.SetVector3("lights[0].Color", glm::vec3(1));
-
     shader.SetMatrix4x4("world", glm::mat4());
-    shader.SetVector3("albedoColor", glm::vec3(1)); // the base color
+    shader.SetBool("topHalf", false);
 
     for (Patch& p : patches)
     {
-        shader.SetVector3("ambient", p.finalColor);
-        shader.SetFloat("metallic", 0); // not used
-        shader.SetFloat("roughness", 1); // not used
+        shader.SetVector3("albedoColor", p.finalColor);
         p.mesh.Draw(shader);
     }
 }
@@ -253,7 +351,7 @@ int main(int argc, char* argv[])
 
     // initialize GLEW
     glewExperimental = GL_TRUE;
-    GLFWwindow* window = glfwCreateWindow(width, height, "Screen Space Reflections", NULL, NULL);
+    window = glfwCreateWindow(width, height, "Radiosity", NULL, NULL);
     if (window == NULL)
     {
         cout << "Failed to create GLFW window" << endl;
