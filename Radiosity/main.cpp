@@ -124,24 +124,24 @@ void Bake(int iterations, int hemicubeSize)
     glViewport(0, 0, hemicubeSize, hemicubeSize);
 
     shader.use();
-    shader.SetMatrix4x4("projection", glm::perspective(glm::radians(45.f), 1.f, 0.1f, 100.f));
-    shader.SetMatrix4x4("world", glm::mat4());
+    shader.SetMatrix4x4("projection", glm::perspective(glm::radians(90.f), 1.f, 0.1f, 100.f));
     shader.SetInt("size", hemicubeSize);
 
     // determine form factors first (viewability of each patch doesn't change between iterations, so just need to do this once)
-    for (int i = 0; i < patches.size(); i++)
+    int i = 0;
+    for (Patch& pi : patches)
     {
-        Patch& pi = patches[i];
-        cout << "Calculating form factors for patch " << i << "..." << endl;
+        cout << "Calculating form factors for patch " << ++i << " of " << patches.size() << "..." << endl;
         for (Patch& pj : patches)
         {
-            if (&pj == &pi) continue;
+            // skip if patches are the same or if fij was already calculated in a previous iteration
+            if (&pj == &pi || pi.formFactors.find(&pj) != pi.formFactors.end()) continue;
             // render the whole scene, where pj is white and everything else is black.
             // push out the patch just a tiny bit to prevent z-fighting w/ actual scene
-            for (int i = 0; i < 3; i++)
-                pj.mesh.vertices[i].Position += pj.normal * 0.01f;
+            shader.SetMatrix4x4("world", glm::translate(glm::mat4(), pj.normal * 0.01f));
 
             // project pj onto each side of the hemicube
+            float f = 0;
             for (int viewI = 0; viewI < 5; viewI++)
             {
                 glClearColor(0.f, 0.f, 0.f, 0.f);
@@ -158,7 +158,6 @@ void Bake(int iterations, int hemicubeSize)
                 glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGBA, GL_FLOAT, colors);
 
                 // read the resulting pixels to get total form factor
-                float f = 0;
                 for (int j = 0; j < hemicubeSize; j++)
                 {
                     for (int i = 0; i < hemicubeSize; i++)
@@ -173,12 +172,11 @@ void Bake(int iterations, int hemicubeSize)
                         f += dF * colors[j * hemicubeSize + i].x;
                     }
                 }
-                pi.formFactors[&pj] += f;
                 delete[] colors;
             }
-
-            for (int i = 0; i < 3; i++)
-                pj.mesh.vertices[i].Position -= pj.normal * 0.01f;
+            // reciprocity; fij = fji
+            pi.formFactors[&pj] = f;
+            pj.formFactors[&pi] = f;
         }
         pi.finalColor = pi.emission;
     }
@@ -186,6 +184,7 @@ void Bake(int iterations, int hemicubeSize)
     // do the actual radiosity thing
     for (int i = 0; i < iterations; i++)
     {
+        cout << "Beginning flux output iteration " << i << "..." << endl;
         // Send flux from each patch to each other patch
         for (Patch& pi : patches)
         {
@@ -229,12 +228,12 @@ void init()
         glm::vec3(-0.5f, 2.97f, -5.5f),
         glm::vec3(0.9f, 2.97f, -5.5f)
     };
-    patches.push_back(CreatePatch(lightV, glm::vec3(1)));
+    patches.push_back(CreatePatch(lightV, glm::vec3(6)));
 
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
     scene->SetWorldTM({ 3, -2.5f, -2 }, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
-    scene->GetMaterial().albedo = glm::vec3(1);
+    scene->GetMaterial().albedo = glm::vec3(0);
 
     // Patch generation
     glm::mat4 world = scene->GetWorldTM().GetMatrix();
@@ -253,7 +252,7 @@ void init()
             patches.push_back(CreatePatch(verts, glm::vec3(0)));
         }
     }
-    Bake(1, 8);
+    Bake(4, 24);
 }
 
 void Tick()
@@ -313,8 +312,8 @@ void display(void)
 
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(80.f), (float)width / (float)height, 0.1f, 1000.f));
     shader.SetMatrix4x4("view", glm::lookAt(camTM.GetTranslation(), camTM.GetTranslation() - camTM.GetForward(), glm::vec3(0.f, 1.f, 0.f)));
-    shader.SetMatrix4x4("world", glm::mat4());
     shader.SetBool("topHalf", false);
+    shader.SetMatrix4x4("world", glm::mat4());
 
     for (Patch& p : patches)
     {
