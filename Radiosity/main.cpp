@@ -133,14 +133,11 @@ void Bake(int iterations, int hemicubeSize)
     {
         Patch& pi = patches[i];
         cout << "Calculating form factors for patch " << i << "..." << endl;
-
         for (Patch& pj : patches)
         {
             if (&pj == &pi) continue;
-
-            // render the whole scene, where pj is white and everything else is black
-            // push out the patch just a tiny bit to prevent z - fighting w/ the
-            // actual scene mesh when projecting onto hemicubes
+            // render the whole scene, where pj is white and everything else is black.
+            // push out the patch just a tiny bit to prevent z-fighting w/ actual scene
             for (int i = 0; i < 3; i++)
                 pj.mesh.vertices[i].Position += pj.normal * 0.01f;
 
@@ -161,22 +158,9 @@ void Bake(int iterations, int hemicubeSize)
                 glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGBA, GL_FLOAT, colors);
 
                 // read the resulting pixels to get total form factor
-                float f = 0;
-                for (int j = 0; j < hemicubeSize; j++)
-                {
-                    for (int i = 0; i < hemicubeSize; i++)
-                    {
-                        // i,j = 0,0 should correspond to x,y = -1,-1, since pixel 0,0 is the bottom-left corner of the screen... probably
-                        float x = (float)i / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
-                        float y = (float)j / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
+                for (int i = 0; i < hemicubeSize * hemicubeSize; i++)
+                    pi.formFactors[&pj] += colors[i].w / 100.f;
 
-                        float dF = ((viewI == 0 ? 1.f : glm::max(y, 0.f)) / (float)(hemicubeSize * hemicubeSize)) /
-                            (glm::pi<float>() * glm::pow((1.f + x * x + y * y), 2.f));
-
-                        f += dF * colors[j * hemicubeSize + i].x;
-                    }
-                }
-                pi.formFactors[&pj] += f;
                 delete[] colors;
             }
 
