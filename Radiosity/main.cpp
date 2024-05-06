@@ -158,9 +158,22 @@ void Bake(int iterations, int hemicubeSize)
                 glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGBA, GL_FLOAT, colors);
 
                 // read the resulting pixels to get total form factor
-                for (int i = 0; i < hemicubeSize * hemicubeSize; i++)
-                    pi.formFactors[&pj] += colors[i].w / 100.f;
+                float f = 0;
+                for (int j = 0; j < hemicubeSize; j++)
+                {
+                    for (int i = 0; i < hemicubeSize; i++)
+                    {
+                        // i,j = 0,0 should correspond to x,y = -1,-1, since pixel 0,0 is the bottom-left corner of the screen... probably
+                        float x = (float)i / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
+                        float y = (float)j / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
 
+                        float dF = ((viewI == 0 ? 1.f : glm::max(y, 0.f)) / (float)(hemicubeSize * hemicubeSize)) /
+                            (glm::pi<float>() * glm::pow((1.f + x * x + y * y), 2.f));
+
+                        f += dF * colors[j * hemicubeSize + i].x;
+                    }
+                }
+                pi.formFactors[&pj] += f;
                 delete[] colors;
             }
 
@@ -221,7 +234,7 @@ void init()
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
     scene->SetWorldTM({ 3, -2.5f, -2 }, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
-    scene->GetMaterial().albedo = glm::vec3(0);
+    scene->GetMaterial().albedo = glm::vec3(1);
 
     // Patch generation
     glm::mat4 world = scene->GetWorldTM().GetMatrix();
