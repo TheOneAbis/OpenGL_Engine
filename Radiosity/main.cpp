@@ -78,6 +78,7 @@ Transform camTM;
 glm::vec2 camEulers;
 float dt, oldT;
 float camSpeed = 3.f;
+glm::vec3 lightColor = glm::vec3(30, 30, 30);
 
 Patch CreatePatch(glm::vec3 positions[4], glm::vec3 emission)
 {
@@ -264,7 +265,7 @@ void init()
         glm::vec3(-0.5f, 2.97f, -5.5f),
         glm::vec3(0.9f, 2.97f, -5.5f)
     };
-    patches.push_back(CreatePatch(lightV, glm::vec3(30)));
+    patches.push_back(CreatePatch(lightV, lightColor));
 
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
