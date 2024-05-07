@@ -30,6 +30,7 @@ namespace AB
         // constructor to read and build the shader
         Shader() = default;
         Shader(const char* vertexPath, const char* fragmentPath);
+        Shader(const char* computePath);
 
         // use/activate the shader
         void use();

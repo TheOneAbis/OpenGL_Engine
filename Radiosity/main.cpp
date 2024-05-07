@@ -69,6 +69,7 @@ struct Patch
 int width = 1280, height = 720;
 
 Shader shader;
+Shader compute;
 vector<Patch> patches;
 GLFWwindow* window;
 
@@ -134,14 +135,9 @@ void Bake(int iterations, int hemicubeSize)
         cout << "Calculating form factors for patch " << ++i << " of " << patches.size() << "..." << endl;
         for (Patch& pj : patches)
         {
-            // skip if patches are the same or if fij was already calculated in a previous iteration
-            if (&pj == &pi || pi.formFactors.find(&pj) != pi.formFactors.end()) continue;
-            // render the whole scene, where pj is white and everything else is black.
-            // push out the patch just a tiny bit to prevent z-fighting w/ actual scene
-            shader.SetMatrix4x4("world", glm::translate(glm::mat4(), pj.normal * 0.01f));
-
-            // project pj onto each side of the hemicube
-            float f = 0;
+            if (&pj == &pi) continue;
+            
+            float f = 0; // project pj onto each side of the hemicube for form factor
             for (int viewI = 0; viewI < 5; viewI++)
             {
                 glClearColor(0.f, 0.f, 0.f, 0.f);
@@ -150,6 +146,7 @@ void Bake(int iterations, int hemicubeSize)
                 shader.SetBool("topHalf", viewI != 0); 
                 shader.SetMatrix4x4("view", pi.views[viewI]);
                 shader.SetVector3("albedoColor", glm::vec3(1));
+                shader.SetMatrix4x4("world", glm::translate(glm::mat4(), pj.normal * 0.01f));
 
                 pj.mesh.Draw(shader);
                 Scene::Get().Render(shader);
@@ -174,9 +171,7 @@ void Bake(int iterations, int hemicubeSize)
                 }
                 delete[] colors;
             }
-            // reciprocity; fij = fji
             pi.formFactors[&pj] = f;
-            pj.formFactors[&pi] = f;
         }
         pi.finalColor = pi.emission;
     }
@@ -195,7 +190,6 @@ void Bake(int iterations, int hemicubeSize)
                 pj.incident += pi.emission * pj.reflectance * fij * (pi.area / pj.area);
             }
         }
-
         // Set each patch to emit their resulting exident light (incident * reflectance) for next iteration.
         // also add this exident light to their final color.
         for (Patch& p : patches)
@@ -233,7 +227,7 @@ void init()
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
     scene->SetWorldTM({ 3, -2.5f, -2 }, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
-    scene->GetMaterial().albedo = glm::vec3(0);
+    scene->GetMaterial().albedo = glm::vec3(0.f);
 
     // Patch generation
     glm::mat4 world = scene->GetWorldTM().GetMatrix();

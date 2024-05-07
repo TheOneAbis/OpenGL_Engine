@@ -98,6 +98,61 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath)
     glDeleteShader(fragment);
 }
 
+Shader::Shader(const char* computePath)
+{
+    string computeCode;
+    ifstream cShaderFile;
+
+    cShaderFile.exceptions(ifstream::failbit | std::ifstream::badbit);
+    try
+    {
+        cShaderFile.open(computePath);
+
+        stringstream cShaderStream;
+        cShaderStream << cShaderFile.rdbuf();
+        cShaderFile.close();
+
+        computeCode = cShaderStream.str();
+    }
+    catch (ifstream::failure e)
+    {
+        cout << "ERROR: Shader file was not successfully read. " << std::endl;
+    }
+    const char* cShaderCode = computeCode.c_str();
+
+    // compile shaders
+    unsigned int compute;
+    int success;
+    char infoLog[512];
+
+    // vertex shader
+    compute = glCreateShader(GL_COMPUTE_SHADER);
+    glShaderSource(compute, 1, &cShaderCode, NULL);
+    glCompileShader(compute);
+
+    // Check compilation errors
+    glGetShaderiv(compute, GL_COMPILE_STATUS, &success);
+    if (!success)
+    {
+        glGetShaderInfoLog(compute, 512, NULL, infoLog);
+        cout << "SHADER COMPILATIN ERROR: COMPUTE COMPILATION FAILED;\n" << infoLog << endl;
+    }
+
+    // Create shader program
+    ID = glCreateProgram();
+    glAttachShader(ID, compute);
+    glLinkProgram(ID);
+
+    // Check link errors
+    glGetProgramiv(ID, GL_LINK_STATUS, &success);
+    if (!success)
+    {
+        glGetProgramInfoLog(ID, 512, NULL, infoLog);
+        cout << "SHADER LINK ERROR: \n" << infoLog << endl;
+    }
+    glDeleteShader(compute);
+}
+
 void Shader::use()
 {
     glUseProgram(ID);
