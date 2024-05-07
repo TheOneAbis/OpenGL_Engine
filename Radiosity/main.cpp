@@ -116,15 +116,17 @@ Patch CreatePatch(glm::vec3 positions[4], glm::vec3 emission)
     // cross(tri1) / 2 + cross(tri2) / 2
     p.area = glm::length(glm::cross(v0, v1)) / 2.f + glm::length(glm::cross(v2, v3)) / 2.f;
     p.emission = emission;
-    p.id = patches.size();
+    p.id = patches.size() + 1; // patch's id is its index in the patch vector + 1
 
     return p;
 }
 
+// turn the patch's id into a color passable to the frag shader
 glm::vec3 ToColor(unsigned int id)
 {
     return glm::vec3(id / (255 * 255) % 255, id / 255 % 255, id % 255);
 }
+// revert a color from the framebuffer back to the id of the patch that rendered it
 unsigned int FromColor(glm::vec3 c)
 {
     return c.r * 255 * 255 + c.g * 255 + c.b;
@@ -139,7 +141,7 @@ void Bake(int iterations, int hemicubeSize)
 
     glGenTextures(1, &colorTex);
     glBindTexture(GL_TEXTURE_2D, colorTex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, hemicubeSize, hemicubeSize, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, hemicubeSize, hemicubeSize, 0, GL_RGB, GL_FLOAT, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
@@ -179,31 +181,32 @@ void Bake(int iterations, int hemicubeSize)
             // for side views, the bottom half ends up under the patch, so render top half only
             shader.SetBool("topHalf", viewI != 0);
             shader.SetMatrix4x4("view", pi.views[viewI]);
+            shader.SetMatrix4x4("world", glm::mat4());
 
             for (Patch& pj : patches)
             {
                 if (&pj == &pi) continue;
-                glm::vec3 c = ToColor(pj.id);
-                shader.SetVector3("albedoColor", glm::vec3(1, 1, 1));
+
+                shader.SetVector3("albedoColor", ToColor(pj.id));
                 pj.mesh.Draw(shader);
             }
 
-            glm::vec4* colors = new glm::vec4[hemicubeSize * hemicubeSize];
-            glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGBA32F, GL_FLOAT, colors);
+            glm::vec3* colors = new glm::vec3[hemicubeSize * hemicubeSize];
+            glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGB, GL_FLOAT, colors);
 
             // read the resulting pixels to get total form factor
             for (int j = 0; j < hemicubeSize; j++)
             {
                 for (int i = 0; i < hemicubeSize; i++)
                 {
-                    // i,j = 0,0 should correspond to x,y = -1,-1, since pixel 0,0 is the bottom-left corner of the screen... probably
+                    // i,j = 0,0 should correspond to x,y = -1,-1
                     float x = (float)i / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
                     float y = (float)j / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
 
                     float dF = ((viewI == 0 ? 1.f : glm::max(y, 0.f)) / (float)(hemicubeSize * hemicubeSize)) /
                         (glm::pi<float>() * glm::pow((1.f + x * x + y * y), 2.f));
-                    glm::vec4 c = colors[j * hemicubeSize + i];
-                    pi.formFactors[FromColor(glm::vec3(c))] += dF * c.x;
+                    glm::vec3 c = colors[j * hemicubeSize + i];
+                    pi.formFactors[FromColor(c)] += dF;
                 }
             }
             delete[] colors;
@@ -219,7 +222,8 @@ void Bake(int iterations, int hemicubeSize)
         {
             for (auto& pair : pi.formFactors)
             {
-                Patch& pj = patches[pair.first];
+                if (pair.first == 0) continue; // id of 0 is reserved for nothing being rendered
+                Patch& pj = patches[pair.first - 1];
                 pj.incident += pi.emission * pj.reflectance * pair.second * (pi.area / pj.area);
             }
         }
@@ -252,7 +256,6 @@ void init()
 
     // set up shader
     shader = Shader("../ABCore/Shaders/vertex.vert", "../ABCore/Shaders/frag_unlit.frag");
-
     // light patch
     glm::vec3 lightV[4] =
     {
@@ -261,12 +264,11 @@ void init()
         glm::vec3(-0.5f, 2.97f, -5.5f),
         glm::vec3(0.9f, 2.97f, -5.5f)
     };
-    patches.push_back(CreatePatch(lightV, glm::vec3(6)));
+    patches.push_back(CreatePatch(lightV, glm::vec3(30)));
 
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
     scene->SetWorldTM({ 3, -2.5f, -2 }, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
-    scene->GetMaterial().albedo = glm::vec3(1.f);
 
     // Patch generation
     glm::mat4 world = scene->GetWorldTM().GetMatrix();
@@ -285,7 +287,7 @@ void init()
             patches.push_back(CreatePatch(verts, glm::vec3(0)));
         }
     }
-    Bake(4, 64);
+    Bake(16, 256);
 }
 
 void Tick()
