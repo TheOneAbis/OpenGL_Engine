@@ -60,9 +60,10 @@ struct Patch
 
     vector<Patch*> adjacents;
     float area;
+    unsigned int id;
 
     // maps each other patch in the scene to their form factors
-    unordered_map<Patch*, float> formFactors;
+    unordered_map<unsigned int, float> formFactors;
 };
 
 // the window's width and height
@@ -114,80 +115,112 @@ Patch CreatePatch(glm::vec3 positions[4], glm::vec3 emission)
 
     // cross(tri1) / 2 + cross(tri2) / 2
     p.area = glm::length(glm::cross(v0, v1)) / 2.f + glm::length(glm::cross(v2, v3)) / 2.f;
-
     p.emission = emission;
+    p.id = patches.size();
+
     return p;
+}
+
+glm::vec3 ToColor(unsigned int id)
+{
+    return glm::vec3(id / (255 * 255) % 255, id / 255 % 255, id % 255);
+}
+unsigned int FromColor(glm::vec3 c)
+{
+    return c.r * 255 * 255 + c.g * 255 + c.b;
 }
 
 void Bake(int iterations, int hemicubeSize)
 {
-    glReadBuffer(GL_BACK); // glReadPixels should read from backbuffer
+    // Create framebuffer for rendering colors to
+    unsigned int framebuffer, colorTex, depthStencil;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    glGenTextures(1, &colorTex);
+    glBindTexture(GL_TEXTURE_2D, colorTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, hemicubeSize, hemicubeSize, 0, GL_RGBA, GL_FLOAT, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex, 0);
+
+    glGenRenderbuffers(1, &depthStencil);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthStencil);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, hemicubeSize, hemicubeSize);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0); // unbind
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencil);
+
+    unsigned int DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
+    glDrawBuffers(1, DrawBuffers);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    {
+        cout << "ERROR: Framebuffer shat itself!" << endl;
+        return;
+    }
+
+    glEnable(GL_DEPTH_TEST);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
     glViewport(0, 0, hemicubeSize, hemicubeSize);
 
     shader.use();
     shader.SetMatrix4x4("projection", glm::perspective(glm::radians(90.f), 1.f, 0.1f, 100.f));
     shader.SetInt("size", hemicubeSize);
 
-    // determine form factors first (viewability of each patch doesn't change between iterations, so just need to do this once)
+    // Determine form factors
     int i = 0;
     for (Patch& pi : patches)
     {
         cout << "Calculating form factors for patch " << ++i << " of " << patches.size() << "..." << endl;
-        for (Patch& pj : patches)
+        for (int viewI = 0; viewI < 5; viewI++)
         {
-            if (&pj == &pi) continue;
-            
-            float f = 0; // project pj onto each side of the hemicube for form factor
-            for (int viewI = 0; viewI < 5; viewI++)
+            glClearColor(0.f, 0.f, 0.f, 0.f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            // for side views, the bottom half ends up under the patch, so render top half only
+            shader.SetBool("topHalf", viewI != 0);
+            shader.SetMatrix4x4("view", pi.views[viewI]);
+
+            for (Patch& pj : patches)
             {
-                glClearColor(0.f, 0.f, 0.f, 0.f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                // for side views, the bottom half ends up under the patch, so render top half only
-                shader.SetBool("topHalf", viewI != 0); 
-                shader.SetMatrix4x4("view", pi.views[viewI]);
-                shader.SetVector3("albedoColor", glm::vec3(1));
-                shader.SetMatrix4x4("world", glm::translate(glm::mat4(), pj.normal * 0.01f));
-
+                if (&pj == &pi) continue;
+                glm::vec3 c = ToColor(pj.id);
+                shader.SetVector3("albedoColor", glm::vec3(1, 1, 1));
                 pj.mesh.Draw(shader);
-                Scene::Get().Render(shader);
-
-                glm::vec4* colors = new glm::vec4[hemicubeSize * hemicubeSize];
-                glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGBA, GL_FLOAT, colors);
-
-                // read the resulting pixels to get total form factor
-                for (int j = 0; j < hemicubeSize; j++)
-                {
-                    for (int i = 0; i < hemicubeSize; i++)
-                    {
-                        // i,j = 0,0 should correspond to x,y = -1,-1, since pixel 0,0 is the bottom-left corner of the screen... probably
-                        float x = (float)i / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
-                        float y = (float)j / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
-
-                        float dF = ((viewI == 0 ? 1.f : glm::max(y, 0.f)) / (float)(hemicubeSize * hemicubeSize)) /
-                            (glm::pi<float>() * glm::pow((1.f + x * x + y * y), 2.f));
-
-                        f += dF * colors[j * hemicubeSize + i].x;
-                    }
-                }
-                delete[] colors;
             }
-            pi.formFactors[&pj] = f;
+
+            glm::vec4* colors = new glm::vec4[hemicubeSize * hemicubeSize];
+            glReadPixels(0, 0, hemicubeSize, hemicubeSize, GL_RGBA32F, GL_FLOAT, colors);
+
+            // read the resulting pixels to get total form factor
+            for (int j = 0; j < hemicubeSize; j++)
+            {
+                for (int i = 0; i < hemicubeSize; i++)
+                {
+                    // i,j = 0,0 should correspond to x,y = -1,-1, since pixel 0,0 is the bottom-left corner of the screen... probably
+                    float x = (float)i / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
+                    float y = (float)j / (float)hemicubeSize * 2.f - 1.f; // [-1,1]
+
+                    float dF = ((viewI == 0 ? 1.f : glm::max(y, 0.f)) / (float)(hemicubeSize * hemicubeSize)) /
+                        (glm::pi<float>() * glm::pow((1.f + x * x + y * y), 2.f));
+                    glm::vec4 c = colors[j * hemicubeSize + i];
+                    pi.formFactors[FromColor(glm::vec3(c))] += dF * c.x;
+                }
+            }
+            delete[] colors;
         }
         pi.finalColor = pi.emission;
     }
 
-    // do the actual radiosity thing
+    // Send flux from each patch to each other patch
     for (int i = 0; i < iterations; i++)
     {
         cout << "Beginning flux output iteration " << i << "..." << endl;
-        // Send flux from each patch to each other patch
         for (Patch& pi : patches)
         {
             for (auto& pair : pi.formFactors)
             {
-                Patch& pj = *pair.first;
-                float fij = pair.second;
-                pj.incident += pi.emission * pj.reflectance * fij * (pi.area / pj.area);
+                Patch& pj = patches[pair.first];
+                pj.incident += pi.emission * pj.reflectance * pair.second * (pi.area / pj.area);
             }
         }
         // Set each patch to emit their resulting exident light (incident * reflectance) for next iteration.
@@ -199,6 +232,12 @@ void Bake(int iterations, int hemicubeSize)
             p.incident = glm::vec3(0); // reset for next iteration
         }
     }
+
+    // cleanup
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &framebuffer);
+    glDeleteTextures(1, &colorTex);
+    glDeleteRenderbuffers(1, &depthStencil);
     glViewport(0, 0, (GLsizei)width, (GLsizei)height);
 }
 
@@ -227,7 +266,7 @@ void init()
     // set up scene model
     GameObject* scene = Scene::Get().Add(GameObject("../Assets/cornell-box-holes2-subdivided2.obj", "Cornell Box"));
     scene->SetWorldTM({ 3, -2.5f, -2 }, glm::quat({ glm::pi<float>() / 2.f, glm::pi<float>(), glm::pi<float>() }));
-    scene->GetMaterial().albedo = glm::vec3(0.f);
+    scene->GetMaterial().albedo = glm::vec3(1.f);
 
     // Patch generation
     glm::mat4 world = scene->GetWorldTM().GetMatrix();
@@ -246,7 +285,7 @@ void init()
             patches.push_back(CreatePatch(verts, glm::vec3(0)));
         }
     }
-    Bake(4, 24);
+    Bake(4, 64);
 }
 
 void Tick()

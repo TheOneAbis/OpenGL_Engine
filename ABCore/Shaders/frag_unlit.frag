@@ -1,12 +1,12 @@
-#version 330 core
+#version 450 core
 
 uniform vec3 albedoColor;
 uniform bool topHalf;
 uniform int size;
 
-out vec4 fragColor;
+layout (location = 0) out vec3 fragColor;
 
 void main()
 {
-    fragColor = vec4(topHalf && gl_FragCoord.y < size / 2.f ? vec3(0) : albedoColor, 1);
+    fragColor = topHalf && gl_FragCoord.y < size / 2.f ? vec3(0) : albedoColor;
 }
